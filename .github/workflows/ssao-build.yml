@@ -13,11 +13,16 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ libvulkan-dev glslc glslang-tools spirv-tools libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libx11-dev zlib1g-dev vulkan-tools mesa-vulkan-drivers vulkan-validationlayers xvfb
+          sudo apt-get install -y ccache cmake ninja-build g++ libvulkan-dev glslc glslang-tools spirv-tools libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libx11-dev zlib1g-dev vulkan-tools mesa-vulkan-drivers vulkan-validationlayers xvfb
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ccache
+          key: ssao-ubuntu24-gcc13-${{ github.sha }}
+          restore-keys: ssao-ubuntu24-gcc13-
       - name: Configure
-        run: cmake -S . -B build-ci -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DERUPTION_FETCH_DEMO_MAP=OFF -DERUPTION_BUILD_TESTS=ON
+        run: cmake -S . -B build-ci -G Ninja -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_BUILD_TYPE=RelWithDebInfo -DERUPTION_FETCH_DEMO_MAP=OFF -DERUPTION_BUILD_TESTS=ON
       - name: Build engine and tests
-        run: cmake --build build-ci --parallel 2
+        run: cmake --build build-ci --parallel 2 -- -k 0
       - name: Run CPU tests
         run: ctest --test-dir build-ci --output-on-failure
       - name: Validate SSAO SPIR-V
@@ -38,3 +43,8 @@ jobs:
             dist/ssao-linux-x86_64.tar.gz
             vulkan-device.txt
           if-no-files-found: error
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ~/.cache/ccache
+          key: ssao-ubuntu24-gcc13-${{ github.sha }}
