@@ -329,7 +329,7 @@ void Engine::drawLightingControls() {
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Dedicated half-res SSAO pass with bilateral blur. Grounds props, darkens corners/crevices/contact lines.");
     if (m_ssaoEnabled) {
         ImGui::SliderFloat("  AO Strength", &m_ssaoStrength, 0.0f, 3.0f, "%.2f");
-        ImGui::SliderFloat("  AO Radius (m)", &m_ssaoRadius, 0.2f, 5.0f, "%.2f");
+        ImGui::SliderFloat("  AO Radius (world units)", &m_ssaoRadius, 0.5f, 60.0f, "%.1f u");
     }
 
     ImGui::Checkbox("Environment Specular (IBL)", &m_envSpecEnabled);

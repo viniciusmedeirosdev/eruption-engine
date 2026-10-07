@@ -97,7 +97,16 @@ bool DeferredLighting::init(VulkanContext* ctx, GBuffer* gbuffer, BindlessDescri
     samplerInfo.maxLod = 1.0f;
     vkCreateSampler(m_ctx->device(), &samplerInfo, nullptr, &m_gbufferSampler);
 
-    return m_litView != VK_NULL_HANDLE && m_directionalPipeline != VK_NULL_HANDLE;
+    // SSAO images are sampled by lighting even when AO is disabled (neutral
+    // white). Missing pipelines must fail initialization, not leave undefined
+    // images feeding the lighting passes.
+    const bool ready = m_litView != VK_NULL_HANDLE &&
+        m_directionalPipeline != VK_NULL_HANDLE &&
+        m_ambientPipeline != VK_NULL_HANDLE &&
+        m_ssaoView != VK_NULL_HANDLE && m_ssaoBlurView != VK_NULL_HANDLE &&
+        m_ssaoPipeline != VK_NULL_HANDLE && m_ssaoBlurPipeline != VK_NULL_HANDLE;
+    if (!ready) ERUPTION_LOG_ERROR("Deferred lighting/SSAO initialization failed. Check shaders and Vulkan support.");
+    return ready;
 }
 
 void DeferredLighting::shutdown() {

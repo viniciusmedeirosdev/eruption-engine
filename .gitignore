@@ -147,3 +147,9 @@ eruption-pbr-tests
 #   git clone git@github.com:eruptionlabs/eruption-tools.git tools/scripts
 perf/
 tools/scripts/
+
+# Build e capturas da entrega SSAO
+build-ssao/
+build-ci/
+evidencias/
+dist/
