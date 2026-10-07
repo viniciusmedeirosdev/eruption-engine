@@ -1,3 +1,5 @@
+> **Entrega SSAO (fork acadêmico):** [instruções de compilação, execução e evidências](docs/ENTREGA_SSAO.md).
+
 <p align="center">
   <img src="assets/icon/eruption_v3_256.png" width="160" alt="Eruption Engine">
 </p>
