@@ -62,7 +62,8 @@ public:
     uint32_t lastDrawnTriangles() const { return m_lastDrawnTriangles; }
     uint32_t lastDrawnChunks() const { return m_lastDrawnChunks; }
 
-    bool init(VulkanContext* ctx, BindlessDescriptor* bindless);
+    bool init(VulkanContext* ctx, BindlessDescriptor* bindless,
+              VkDescriptorSetLayout frameLayout, VkDescriptorSet frameSet);
     void shutdown();
     void clear();
 

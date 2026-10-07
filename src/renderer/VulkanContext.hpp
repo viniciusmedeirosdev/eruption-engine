@@ -247,6 +247,7 @@ private:
     bool m_pipeStatsActive = false;
     std::vector<VkQueryPool> m_timestampPools;
     std::vector<std::vector<uint64_t>> m_timestampResults;
+    bool m_querySlotSubmitted[MAX_FRAMES_IN_FLIGHT]{};
     uint32_t m_currentFrame = 0;
     uint32_t m_imageIndex = 0;
     bool m_isFrameRecording = false;

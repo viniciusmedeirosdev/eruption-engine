@@ -376,8 +376,11 @@ private:
 
     VkDescriptorSetLayout m_heightmapDescLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_heightmapDescPool = VK_NULL_HANDLE;
-    VkDescriptorSet m_heightmapUpdateDescSet = VK_NULL_HANDLE;
-    VkDescriptorSet m_heightmapBlurDescSet = VK_NULL_HANDLE;
+    static constexpr uint32_t kHeightmapBlurPasses = 5;
+    VkDescriptorSet m_heightmapUpdateSets[VulkanContext::MAX_FRAMES_IN_FLIGHT]{};
+    VkDescriptorSet m_heightmapBlurSets[VulkanContext::MAX_FRAMES_IN_FLIGHT][kHeightmapBlurPasses]{};
+    VkDescriptorSetLayout m_heightmapBlurDescLayout = VK_NULL_HANDLE;
+    VkPipelineLayout m_heightmapBlurPipelineLayout = VK_NULL_HANDLE;
     VkPipelineLayout m_heightmapPipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_heightmapUpdatePipeline = VK_NULL_HANDLE;
     VkPipeline m_heightmapBlurPipeline = VK_NULL_HANDLE;

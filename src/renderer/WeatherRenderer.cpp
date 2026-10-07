@@ -677,10 +677,14 @@ void WeatherRenderer::destroyHeightmapResources() {
     m_heightmapUpdatePipeline = VK_NULL_HANDLE;
     vkDestroyPipelineLayout(m_ctx->device(), m_heightmapPipelineLayout, nullptr);
     m_heightmapPipelineLayout = VK_NULL_HANDLE;
+    vkDestroyPipelineLayout(m_ctx->device(), m_heightmapBlurPipelineLayout, nullptr);
+    m_heightmapBlurPipelineLayout = VK_NULL_HANDLE;
     vkDestroyDescriptorPool(m_ctx->device(), m_heightmapDescPool, nullptr);
     m_heightmapDescPool = VK_NULL_HANDLE;
     vkDestroyDescriptorSetLayout(m_ctx->device(), m_heightmapDescLayout, nullptr);
     m_heightmapDescLayout = VK_NULL_HANDLE;
+    vkDestroyDescriptorSetLayout(m_ctx->device(), m_heightmapBlurDescLayout, nullptr);
+    m_heightmapBlurDescLayout = VK_NULL_HANDLE;
     vkDestroySampler(m_ctx->device(), m_heightmapSampler, nullptr);
     m_heightmapSampler = VK_NULL_HANDLE;
     vkDestroyImageView(m_ctx->device(), m_heightmapBlurView, nullptr);
@@ -693,8 +697,10 @@ void WeatherRenderer::destroyHeightmapResources() {
     if (m_heightmapImage) vmaDestroyImage(m_ctx->allocator(), m_heightmapImage, m_heightmapAlloc);
     m_heightmapImage = VK_NULL_HANDLE;
     m_heightmapAlloc = VK_NULL_HANDLE;
-    m_heightmapUpdateDescSet = VK_NULL_HANDLE;
-    m_heightmapBlurDescSet = VK_NULL_HANDLE;
+    for (uint32_t f = 0; f < VulkanContext::MAX_FRAMES_IN_FLIGHT; ++f) {
+        m_heightmapUpdateSets[f] = VK_NULL_HANDLE;
+        for (auto& set : m_heightmapBlurSets[f]) set = VK_NULL_HANDLE;
+    }
 }
 
 bool WeatherRenderer::createTopDownDepthResources() {
@@ -871,48 +877,58 @@ bool WeatherRenderer::createHeightmapPipeline() {
     plInfo.pPushConstantRanges = &pcRange;
     vkCreatePipelineLayout(m_ctx->device(), &plInfo, nullptr, &m_heightmapPipelineLayout);
 
-    auto createComputePipeline = [&](VkShaderModule module, VkPipeline& pipeline) {
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    vkCreateDescriptorSetLayout(m_ctx->device(), &layoutInfo, nullptr, &m_heightmapBlurDescLayout);
+    plInfo.pSetLayouts = &m_heightmapBlurDescLayout;
+    plInfo.pushConstantRangeCount = 0;
+    plInfo.pPushConstantRanges = nullptr;
+    vkCreatePipelineLayout(m_ctx->device(), &plInfo, nullptr, &m_heightmapBlurPipelineLayout);
+
+    auto createComputePipeline = [&](VkShaderModule module, VkPipelineLayout layout, VkPipeline& pipeline) {
         VkComputePipelineCreateInfo pipeInfo{};
     pipeInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipeInfo.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         pipeInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         pipeInfo.stage.module = module;
         pipeInfo.stage.pName = "main";
-        pipeInfo.layout = m_heightmapPipelineLayout;
+        pipeInfo.layout = layout;
         vkCreateComputePipelines(m_ctx->device(), m_ctx->pipelineCache(), 1, &pipeInfo, nullptr, &pipeline);
     };
 
-    createComputePipeline(updateModule, m_heightmapUpdatePipeline);
-    createComputePipeline(blurModule, m_heightmapBlurPipeline);
+    createComputePipeline(updateModule, m_heightmapPipelineLayout, m_heightmapUpdatePipeline);
+    createComputePipeline(blurModule, m_heightmapBlurPipelineLayout, m_heightmapBlurPipeline);
 
     vkDestroyShaderModule(m_ctx->device(), updateModule, nullptr);
     vkDestroyShaderModule(m_ctx->device(), blurModule, nullptr);
 
     VkDescriptorPoolSize poolSizes[2] = {};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[0].descriptorCount = 2;
+    poolSizes[0].descriptorCount = VulkanContext::MAX_FRAMES_IN_FLIGHT;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    poolSizes[1].descriptorCount = 2;
+    poolSizes[1].descriptorCount = (1 + 2 * kHeightmapBlurPasses) * VulkanContext::MAX_FRAMES_IN_FLIGHT;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.maxSets = 2;
+    poolInfo.maxSets = (1 + kHeightmapBlurPasses) * VulkanContext::MAX_FRAMES_IN_FLIGHT;
     poolInfo.poolSizeCount = 2;
     poolInfo.pPoolSizes = poolSizes;
     vkCreateDescriptorPool(m_ctx->device(), &poolInfo, nullptr, &m_heightmapDescPool);
 
-    VkDescriptorSetLayout layouts[2] = {m_heightmapDescLayout, m_heightmapDescLayout};
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = m_heightmapDescPool;
-    allocInfo.descriptorSetCount = 2;
-    allocInfo.pSetLayouts = layouts;
-    VkDescriptorSet sets[2] = {};
-    vkAllocateDescriptorSets(m_ctx->device(), &allocInfo, sets);
-    m_heightmapUpdateDescSet = sets[0];
-    m_heightmapBlurDescSet = sets[1];
-
-    return true;
+    for (uint32_t f = 0; f < VulkanContext::MAX_FRAMES_IN_FLIGHT; ++f) {
+        VkDescriptorSetLayout layouts[1 + kHeightmapBlurPasses];
+        layouts[0] = m_heightmapDescLayout;
+        for (uint32_t p = 1; p <= kHeightmapBlurPasses; ++p) layouts[p] = m_heightmapBlurDescLayout;
+        VkDescriptorSetAllocateInfo ai{};
+        ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        ai.descriptorPool = m_heightmapDescPool;
+        ai.descriptorSetCount = 1 + kHeightmapBlurPasses;
+        ai.pSetLayouts = layouts;
+        VkDescriptorSet sets[1 + kHeightmapBlurPasses]{};
+        if (vkAllocateDescriptorSets(m_ctx->device(), &ai, sets) != VK_SUCCESS) return false;
+        m_heightmapUpdateSets[f] = sets[0];
+        for (uint32_t p = 0; p < kHeightmapBlurPasses; ++p) m_heightmapBlurSets[f][p] = sets[p + 1];
+    }
+    return m_heightmapUpdatePipeline != VK_NULL_HANDLE && m_heightmapBlurPipeline != VK_NULL_HANDLE;
 }
 
 void WeatherRenderer::updateHeightmapOnly(VkCommandBuffer cmd, VkImageView depthView, const RenderParams& params) {
@@ -921,6 +937,8 @@ void WeatherRenderer::updateHeightmapOnly(VkCommandBuffer cmd, VkImageView depth
 
 void WeatherRenderer::updateHeightmap(VkCommandBuffer cmd, VkImageView depthView, const RenderParams& params) {
     if (!m_heightmapUpdatePipeline || depthView == VK_NULL_HANDLE) return;
+    const auto frame = m_ctx->currentFrame();
+    const VkDescriptorSet updateSet = m_heightmapUpdateSets[frame];
 
     // 1) Clear the heightmap to 0 (transfer -> compute).
     m_ctx->cmdImageBarrier(cmd, m_heightmapImage,
@@ -951,14 +969,14 @@ void WeatherRenderer::updateHeightmap(VkCommandBuffer cmd, VkImageView depthView
 
     VkWriteDescriptorSet updateWrites[2] = {};
     updateWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    updateWrites[0].dstSet = m_heightmapUpdateDescSet;
+    updateWrites[0].dstSet = updateSet;
     updateWrites[0].dstBinding = 0;
     updateWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     updateWrites[0].descriptorCount = 1;
     updateWrites[0].pImageInfo = &depthInfo;
 
     updateWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    updateWrites[1].dstSet = m_heightmapUpdateDescSet;
+    updateWrites[1].dstSet = updateSet;
     updateWrites[1].dstBinding = 1;
     updateWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     updateWrites[1].descriptorCount = 1;
@@ -992,7 +1010,7 @@ void WeatherRenderer::updateHeightmap(VkCommandBuffer cmd, VkImageView depthView
                          1.0f / (float)HEIGHTMAP_SIZE, 1.0f / (float)HEIGHTMAP_SIZE);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_heightmapUpdatePipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_heightmapPipelineLayout, 0, 1, &m_heightmapUpdateDescSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_heightmapPipelineLayout, 0, 1, &updateSet, 0, nullptr);
     vkCmdPushConstants(cmd, m_heightmapPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
 
     uint32_t groups = (HEIGHTMAP_SIZE + 15) / 16;
@@ -1022,6 +1040,7 @@ void WeatherRenderer::updateHeightmap(VkCommandBuffer cmd, VkImageView depthView
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_heightmapBlurPipeline);
 
     for (int pass = 0; pass < totalPasses; ++pass) {
+        const VkDescriptorSet blurSet = m_heightmapBlurSets[frame][pass];
         VkDescriptorImageInfo srcInfo{};
         srcInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         srcInfo.imageView = srcView;
@@ -1032,21 +1051,21 @@ void WeatherRenderer::updateHeightmap(VkCommandBuffer cmd, VkImageView depthView
 
         VkWriteDescriptorSet blurWrites[2] = {};
         blurWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        blurWrites[0].dstSet = m_heightmapBlurDescSet;
+        blurWrites[0].dstSet = blurSet;
         blurWrites[0].dstBinding = 0;
         blurWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         blurWrites[0].descriptorCount = 1;
         blurWrites[0].pImageInfo = &srcInfo;
 
         blurWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        blurWrites[1].dstSet = m_heightmapBlurDescSet;
+        blurWrites[1].dstSet = blurSet;
         blurWrites[1].dstBinding = 1;
         blurWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         blurWrites[1].descriptorCount = 1;
         blurWrites[1].pImageInfo = &dstInfo;
 
         vkUpdateDescriptorSets(m_ctx->device(), 2, blurWrites, 0, nullptr);
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_heightmapPipelineLayout, 0, 1, &m_heightmapBlurDescSet, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_heightmapBlurPipelineLayout, 0, 1, &blurSet, 0, nullptr);
         vkCmdDispatch(cmd, groups, groups, 1);
 
         // Sync so the next pass can read what we just wrote.

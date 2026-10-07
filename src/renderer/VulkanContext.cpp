@@ -243,7 +243,7 @@ bool VulkanContext::beginFrame() {
     // to serialize CPU/GPU every frame). WITH_AVAILABILITY keeps unwritten
     // queries from failing the whole read: the buffer is (value, availability)
     // pairs, stride = 2 uint64 per query.
-    if (!m_timestampPools.empty() && m_timestampPools[m_currentFrame] != VK_NULL_HANDLE) {
+    if (m_querySlotSubmitted[m_currentFrame] && !m_timestampPools.empty() && m_timestampPools[m_currentFrame] != VK_NULL_HANDLE) {
         m_timestampResults[m_currentFrame].assign(TIMESTAMP_QUERY_COUNT * 2, 0);
         VkResult qr = vkGetQueryPoolResults(m_device, m_timestampPools[m_currentFrame], 0, TIMESTAMP_QUERY_COUNT,
                                             sizeof(uint64_t) * TIMESTAMP_QUERY_COUNT * 2, m_timestampResults[m_currentFrame].data(),
@@ -257,7 +257,7 @@ bool VulkanContext::beginFrame() {
     // Pipeline statistics do mesmo slot. Sem WITH_AVAILABILITY: e' uma
     // consulta so' e a fence acima ja' garantiu que o frame terminou; se ela
     // nao tiver sido escrita (passe pulado), VK_NOT_READY deixa os zeros.
-    if (m_pipeStatsSupported && !m_pipeStatsPools.empty() &&
+    if (m_querySlotSubmitted[m_currentFrame] && m_pipeStatsSupported && !m_pipeStatsPools.empty() &&
         m_pipeStatsPools[m_currentFrame] != VK_NULL_HANDLE) {
         auto& dst = m_pipeStatsResults[m_currentFrame];
         dst.assign(PIPE_STATS_COUNT, 0);
@@ -319,6 +319,8 @@ bool VulkanContext::endFrame() {
         ERUPTION_LOG_ERROR("vkQueueSubmit failed: %d", submitResult);
         return false;
     }
+
+    m_querySlotSubmitted[m_currentFrame] = true;
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1337,6 +1339,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::debugCallback(
 }
 
 bool VulkanContext::createTimestampPools() {
+    std::fill_n(m_querySlotSubmitted, MAX_FRAMES_IN_FLIGHT, false);
     m_timestampPools.resize(MAX_FRAMES_IN_FLIGHT, VK_NULL_HANDLE);
     m_timestampResults.resize(MAX_FRAMES_IN_FLIGHT);
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {

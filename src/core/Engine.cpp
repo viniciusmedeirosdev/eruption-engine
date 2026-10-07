@@ -423,9 +423,10 @@ bool Engine::init(int width, int height, const std::string& title) {
     presentLoadingScreen("", "Loading Renderers", 0.15f, true);
     m_mipmapMenu.loadConfig();
     m_waterMenu.loadConfig();
-    if (!m_terrainRenderer.init(&m_vulkan, &m_bindless)) return false;
+    if (!m_spriteRenderer.init(&m_vulkan, &m_gbuffer, &m_bindless)) return false;
+    if (!m_terrainRenderer.init(&m_vulkan, &m_bindless, m_spriteRenderer.frameUboLayout(), m_spriteRenderer.frameUboSet())) return false;
     m_terrainRenderer.setMipmapsEnabled(m_mipmapMenu.config.enabled, m_mipmapMenu.config.mode);
-    if (!m_modelRenderer.init(&m_vulkan, &m_bindless)) return false;
+    if (!m_modelRenderer.init(&m_vulkan, &m_bindless, m_spriteRenderer.frameUboLayout(), m_spriteRenderer.frameUboSet())) return false;
     m_modelRenderer.setMipmapsEnabled(m_mipmapMenu.config.enabled);
     m_modelRenderer.setTextureResolver([this](const std::string& path) {
         return this->resolveModelTexture(path);
@@ -474,7 +475,6 @@ bool Engine::init(int width, int height, const std::string& title) {
         }
         return this->resolveModelMesh(legacyModelPath, nodeIdx, vertices, indices);
     });
-    if (!m_spriteRenderer.init(&m_vulkan, &m_gbuffer, &m_bindless)) return false;
     if (fsrActive()) {
         const char* sl = std::getenv("ERUPTION_SPRITE_LAYER");
         if (!(sl && sl[0] == '0')) {

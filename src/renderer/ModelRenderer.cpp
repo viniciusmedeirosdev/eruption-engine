@@ -436,7 +436,11 @@ void ModelMeshGPU::shutdown(VulkanContext* ctx) {
     if (!isExternal) destroyBaseBuffers(ctx);
 }
 
-bool ModelRenderer::init(VulkanContext* ctx, BindlessDescriptor* bindless) {
+bool ModelRenderer::init(VulkanContext* ctx, BindlessDescriptor* bindless,
+                            VkDescriptorSetLayout frameLayout, VkDescriptorSet frameSet) {
+    if (frameLayout == VK_NULL_HANDLE || frameSet == VK_NULL_HANDLE) return false;
+    m_frameUboLayout = frameLayout;
+    m_frameUboSet = frameSet;
     m_ctx = ctx;
     m_bindless = bindless;
 

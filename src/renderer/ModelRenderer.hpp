@@ -227,7 +227,8 @@ public:
     uint32_t lastCacheHits() const { return m_lastCacheHits; }
     uint32_t lastCacheMisses() const { return m_lastCacheMisses; }
 
-    bool init(VulkanContext* ctx, BindlessDescriptor* bindless);
+    bool init(VulkanContext* ctx, BindlessDescriptor* bindless,
+              VkDescriptorSetLayout frameLayout, VkDescriptorSet frameSet);
     void shutdown();
 
     // Texture resolver: called to get bindless slot for a texture path.

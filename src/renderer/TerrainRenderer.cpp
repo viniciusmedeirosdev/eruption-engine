@@ -22,7 +22,11 @@ void TerrainChunkGPU::shutdown(VulkanContext* ctx) {
     }
 }
 
-bool TerrainRenderer::init(VulkanContext* ctx, BindlessDescriptor* bindless) {
+bool TerrainRenderer::init(VulkanContext* ctx, BindlessDescriptor* bindless,
+                            VkDescriptorSetLayout frameLayout, VkDescriptorSet frameSet) {
+    if (frameLayout == VK_NULL_HANDLE || frameSet == VK_NULL_HANDLE) return false;
+    m_frameUboLayout = frameLayout;
+    m_frameUboSet = frameSet;
     m_ctx = ctx;
     m_bindless = bindless;
 
