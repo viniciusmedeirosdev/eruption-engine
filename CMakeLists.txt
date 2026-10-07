@@ -505,6 +505,13 @@ enable_testing()
 
 if(ERUPTION_BUILD_TESTS)
     file(GLOB_RECURSE TEST_SOURCES "tests/*.cpp")
+    list(REMOVE_ITEM TEST_SOURCES "${CMAKE_SOURCE_DIR}/tests/config/config_tests.cpp")
+    add_executable(eruption-config-tests tests/config/config_tests.cpp
+        src/core/ConfigManager.cpp src/core/Logger.cpp)
+    target_include_directories(eruption-config-tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(eruption-config-tests PRIVATE nlohmann_json::nlohmann_json)
+    add_test(NAME ConfigManagerTests COMMAND eruption-config-tests)
+
     # Sprite shadow harness is a standalone benchmark with its own main().
     list(REMOVE_ITEM TEST_SOURCES "${CMAKE_SOURCE_DIR}/tests/shadows/sprite_shadow_harness.cpp")
     # Map bundle test has its own target with a custom main().

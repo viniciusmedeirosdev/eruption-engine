@@ -65,7 +65,7 @@ public:
 
 private:
     std::string m_path;
-    json m_data;
+    json m_data = json::object();
     std::filesystem::file_time_type m_lastWriteTime;
 };
 

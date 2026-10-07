@@ -13,8 +13,15 @@ bool ConfigManager::load(const std::string& path) {
     }
 
     try {
-        file >> m_data;
-        m_lastWriteTime = std::filesystem::last_write_time(path);
+        json candidate;
+        file >> candidate;
+        if (!candidate.is_object()) {
+            ERUPTION_LOG_ERROR("Config root must be an object: %s", path.c_str());
+            return false;
+        }
+        const auto writeTime = std::filesystem::last_write_time(path);
+        m_data = std::move(candidate);
+        m_lastWriteTime = writeTime;
         ERUPTION_LOG_INFO("Config loaded: %s", path.c_str());
         return true;
     } catch (const std::exception& e) {
