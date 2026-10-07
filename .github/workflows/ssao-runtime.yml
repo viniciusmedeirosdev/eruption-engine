@@ -22,7 +22,7 @@ jobs:
       - name: Install software Vulkan and display
         run: |
           sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers libvulkan1 vulkan-tools xvfb libxrandr2 libxinerama1 libxcursor1 libxi6 libx11-6 zlib1g curl
+          sudo apt-get install -y gdb vulkan-validationlayers mesa-vulkan-drivers libvulkan1 vulkan-tools xvfb libxrandr2 libxinerama1 libxcursor1 libxi6 libx11-6 zlib1g curl
       - name: Extract and fetch demo scene
         run: |
           mkdir project
@@ -32,6 +32,7 @@ jobs:
       - name: Render two real frames with SSAO off and on
         working-directory: project
         env:
+          VK_INSTANCE_LAYERS: VK_LAYER_KHRONOS_validation
           ERUPTION_TEST_SCREENSHOT_FRAME: '3'
           ERUPTION_TEST_GRAPHICS_PRESET: low
           ERUPTION_TEST_NO_EFFECTS: '1'
@@ -39,7 +40,11 @@ jobs:
           ERUPTION_RENDER_SCALE: '0.5'
         run: |
           xvfb-run -a vulkaninfo --summary > vulkan-runtime.txt 2>&1
-          timeout 600 xvfb-run -a bash tools/ssao_demo.sh capture
+          if ! timeout 600 xvfb-run -a bash tools/ssao_demo.sh capture; then
+            timeout 120 xvfb-run -a gdb -batch -ex run -ex 'bt 20' --args ./eruption-engine --map parana_field --screenshot debug.png > debug-backtrace.txt 2>&1 || true
+            cat debug-backtrace.txt
+            exit 1
+          fi
       - name: Upload runtime evidence even on failure
         if: always()
         uses: actions/upload-artifact@v4
@@ -48,4 +53,5 @@ jobs:
           path: |
             project/evidencias/
             project/vulkan-runtime.txt
+            project/debug-backtrace.txt
           if-no-files-found: warn
