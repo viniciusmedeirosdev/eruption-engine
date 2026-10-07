@@ -444,6 +444,7 @@ find_package(Threads REQUIRED)
 
 # Preprocessor defines
 target_compile_definitions(eruption-engine PRIVATE
+    GLFW_INCLUDE_NONE
     $<$<CONFIG:Debug>:ERUPTION_DEBUG>
     GLM_FORCE_DEPTH_ZERO_TO_ONE
     GLM_FORCE_LEFT_HANDED
