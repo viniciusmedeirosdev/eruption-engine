@@ -3,7 +3,6 @@ on:
   workflow_run:
     workflows: [SSAO build and validation]
     types: [completed]
-  workflow_dispatch:
 permissions:
   contents: read
   actions: read
@@ -21,8 +20,9 @@ jobs:
           github-token: ${{ github.token }}
       - name: Install software Vulkan and display
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gdb vulkan-validationlayers mesa-vulkan-drivers libvulkan1 vulkan-tools xvfb libxrandr2 libxinerama1 libxcursor1 libxi6 libx11-6 zlib1g curl
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y gdb vulkan-validationlayers mesa-vulkan-drivers libvulkan1 vulkan-tools xvfb libxrandr2 libxinerama1 libxcursor1 libxi6 libx11-6 zlib1g curl
       - name: Extract and fetch demo scene
         run: |
           mkdir project
@@ -43,6 +43,10 @@ jobs:
           if ! timeout 600 xvfb-run -a bash tools/ssao_demo.sh capture; then
             timeout 120 xvfb-run -a gdb -batch -ex run -ex 'bt 20' --args ./eruption-engine --map parana_field --screenshot debug.png > debug-backtrace.txt 2>&1 || true
             cat debug-backtrace.txt
+            exit 1
+          fi
+          if grep -REn 'Validation Error|VUID-' evidencias/ --include='*.log'; then
+            echo 'Vulkan validation errors found in captured execution.' >&2
             exit 1
           fi
       - name: Upload runtime evidence even on failure

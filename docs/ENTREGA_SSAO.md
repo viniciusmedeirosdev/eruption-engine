@@ -3,12 +3,23 @@
 Este projeto utiliza um fork da Eruption Engine, em C++17 e Vulkan 1.3.
 O SSAO e sua integração no renderer já existem no projeto original. As
 adaptações deste fork são os comandos de demonstração/captura, a validação
-automatizada, a correção do controle de raio e a detecção de falha dos pipelines.
+automatizada, a correção do controle de raio, a detecção de falha dos pipelines e as
+correções de inicialização e uso de recursos Vulkan descritas abaixo.
 Não se atribui ao grupo a autoria integral do motor ou do algoritmo original.
 
 Base: https://github.com/eruptionlabs/eruption-engine
 Commit de referência: `d356eadb4718a5382ff931505a7bbcb5c5d49c12`.
 Licença do código: Apache 2.0; consulte também NOTICE e licenças dos assets.
+
+## Correções deste fork
+
+- Build Vulkan sem dependência implícita de headers OpenGL (`GLFW_INCLUDE_NONE`).
+- Inclusão explícita de `<cstdint>` para compilar com GCC 13.
+- FrameUBO criado e fornecido antes de construir os pipelines de terreno/modelos.
+- Layout próprio de descriptors para o blur compute do heightmap: duas storage images.
+- Descriptors do heightmap separados por frame em voo e por passe de blur.
+- Leitura das queries da GPU somente após submissão e conclusão do primeiro uso.
+- Controle de raio SSAO compatível com o valor padrão e expresso em unidades de mundo.
 
 ## Plataforma e requisitos
 
