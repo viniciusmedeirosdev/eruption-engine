@@ -20,16 +20,21 @@ Licença do código: Apache 2.0; consulte também NOTICE e licenças dos assets.
 - Descriptors do heightmap separados por frame em voo e por passe de blur.
 - Leitura das queries da GPU somente após submissão e conclusão do primeiro uso.
 - Controle de raio SSAO compatível com o valor padrão e expresso em unidades de mundo.
+- Configuração opcional ausente usa valores padrão; uma recarga inválida preserva o objeto anterior.
+- Sampler nearest sem filtragem linear de mipmaps ou anisotropia para imagens inteiras.
+- Push constants atualizam todos os estágios declarados no layout de modelos.
+- Recurso `independentBlend` habilitado e verificado na criação do dispositivo.
+- Layout de descriptors das sombras de sprites liberado no encerramento.
 
 ## Plataforma e requisitos
 
 O caminho documentado é **Ubuntu 24.04 x86_64**, com ambiente gráfico,
 CPU com AVX2 e driver que exponha Vulkan 1.3 e os recursos solicitados pela
-engine (incluindo descriptor indexing, dynamic rendering e synchronization2).
+engine (incluindo descriptor indexing, dynamic rendering, synchronization2 e independentBlend).
 A engine contém código específico de Linux; estes scripts não são executáveis
 Windows. No Windows, WSL só serve para a demonstração se `vulkaninfo` confirmar
 os recursos necessários e houver apresentação gráfica funcional. A presença
-de uma RTX 2080 Ti no computador, por si só, não comprova o suporte no WSL.
+de uma GPU compatível no computador, por si só, não comprova o suporte no WSL.
 
 Instale as dependências no Ubuntu:
 
@@ -122,6 +127,22 @@ kernel, isso constitui uma diferença de implementação que deve ser explicada
 na apresentação, não descrita como código idêntico ao pseudocódigo anterior.
 
 ## Validação e evidências
+
+### Resultado verificado em 08/10/2026
+
+Commit de código testado: `dc990c755add2dbd990505d06e65729de589a16d`.
+
+- [Build aprovado](https://github.com/viniciusmedeirosdev/eruption-engine/actions/runs/37744003559): C++/shaders, dois testes CPU (ConfigManager e PBRMapGen) e validação SPIR-V.
+- [Execução gráfica aprovada](https://github.com/viniciusmedeirosdev/eruption-engine/actions/runs/37744189560): carregamento do mapa, capturas SSAO off/on e encerramento sem erros VUID/Validation Error nos logs.
+- [Pacote Linux compilado](https://github.com/viniciusmedeirosdev/eruption-engine/actions/runs/37744003559/artifacts/11534544380).
+- [Capturas PNG, logs e informações Vulkan](https://github.com/viniciusmedeirosdev/eruption-engine/actions/runs/37744189560/artifacts/11534534645).
+
+O teste gráfico usou Ubuntu 24.04, Vulkan por software (Mesa llvmpipe),
+preset low, escala de renderização 0,5 e captura no terceiro frame.
+Sombras e efeitos adicionais foram reduzidos/desligados conforme o workflow;
+o SSAO foi explicitamente alternado. Isso valida esse caminho de execução,
+não todos os presets, GPUs, interações ou desempenho em tempo real.
+Os artefatos do Actions têm retenção limitada; baixe-os antes de expirarem.
 
 O workflow **SSAO build and validation** compila a engine, compila seus shaders,
 executa os testes CPU existentes e valida SPIR-V dos passes SSAO e ambiente.
