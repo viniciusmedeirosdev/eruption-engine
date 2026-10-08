@@ -835,6 +835,12 @@ bool VulkanContext::createLogicalDevice() {
     features12.scalarBlockLayout = m_supportedFeatures12.scalarBlockLayout;
 
     VkPhysicalDeviceFeatures features{};
+    // G-buffer attachments use different blending and write masks.
+    if (!m_supportedFeatures.independentBlend) {
+        ERUPTION_LOG_ERROR("The renderer requires independentBlend support.");
+        return false;
+    }
+    features.independentBlend = VK_TRUE;
     // Only enable these if the driver actually supports them. The engine does
     // not rely on them for core rendering, so keeping them optional improves
     // compatibility with open-source drivers and older hardware.

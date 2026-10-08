@@ -2402,7 +2402,8 @@ void ModelRenderer::render(VkCommandBuffer cmd,
             push.alpha = runAlpha2;
             push.metallicScale = mesh.metallicScale;
             push.roughnessScale = mesh.roughnessScale;
-            vkCmdPushConstants(cmd, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+            vkCmdPushConstants(cmd, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
+                               VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
                                0, sizeof(push), &push);
             if (runVb2 != boundVb || runIb2 != boundIb) {
                 VkDeviceSize offset = 0;

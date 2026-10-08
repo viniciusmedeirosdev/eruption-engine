@@ -208,6 +208,8 @@ bool Engine::init(int width, int height, const std::string& title) {
 
     samplerInfo.magFilter = VK_FILTER_NEAREST;
     samplerInfo.minFilter = VK_FILTER_NEAREST;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    samplerInfo.anisotropyEnable = VK_FALSE;
     vkCreateSampler(m_vulkan.device(), &samplerInfo, nullptr, &m_nearestSampler);
 
     initImGui();

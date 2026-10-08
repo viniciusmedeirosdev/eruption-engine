@@ -97,6 +97,10 @@ void SpriteRenderer::shutdown() {
         vkDestroyDescriptorSetLayout(m_ctx->device(), m_frameUboLayout, nullptr);
         m_frameUboLayout = VK_NULL_HANDLE;
     }
+    if (m_shadowLayoutSet != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(m_ctx->device(), m_shadowLayoutSet, nullptr);
+        m_shadowLayoutSet = VK_NULL_HANDLE;
+    }
     if (m_paletteSampler != VK_NULL_HANDLE) {
         vkDestroySampler(m_ctx->device(), m_paletteSampler, nullptr);
         m_paletteSampler = VK_NULL_HANDLE;
