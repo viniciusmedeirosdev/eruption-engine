@@ -47,3 +47,16 @@
 **Falhas reproduzíveis / links de logs:** PENDENTE.  
 **Próxima ação imediata:** executar ORDEM 00 e depois a primeira etapa pendente.  
 **Restrições do ambiente:** PENDENTE.
+
+## Sessao 27/10/2026 (Claude Code) — PAUSADA a pedido do usuario
+
+- Branch local `feat/ssao-entrega-final` (criada em `ed557ba`). **Nada commitado nem publicado ainda.**
+- Ambiente: Windows 10, RTX 2080 Ti (driver 616.92, Vulkan 1.4), MSYS2 UCRT64 em `D:\msys64` (GCC 16.2, CMake 4.4), build em `build-win/`.
+- Feito e testado na GPU: porte Windows (Platform.hpp etc.), build + CTest 2/2 + spirv-val OK; SSAO com texelFetch;
+  kernel academico opcional (32 amostras/5x5); visualizacao do buffer SSAO (ERUPTION_TEST_PBR_DEBUG=128);
+  A/B na mesma execucao (ERUPTION_TEST_SSAO_AB); eventos de roteiro (ssao*, size, minimize, restore);
+  correcoes de swapchain/resize/minimizar e de sincronizacao. Roteiro completo com validation + sync validation: 0 erros
+  (resta 1 warning benigno: saida de velocidade location 5 sem attachment).
+- GPU (vista padrao, 1920x1061): iluminacao diferida OFF 0,93 ms; SSAO 12/3x3 1,10 ms; 32/5x5 1,28 ms.
+- Demonstracao para aula: `D:\Processamento de Imagens\DEMO_SSAO_AULA\` (fora do repositorio).
+- PENDENTE: revisar diff, commits, push, PR, documentacao final, CI Ubuntu; apagar `D:\Processamento.log` e `eruption-engine\Imagens\` (sobras de um comando meu).
