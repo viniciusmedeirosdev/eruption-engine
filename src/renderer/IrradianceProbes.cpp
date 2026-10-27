@@ -411,9 +411,13 @@ bool IrradianceProbes::bake(TerrainRenderer& terrain, ModelRenderer& models,
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_bakePipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_bakePipeLayout, 0, 1, &bakeSet, 0, nullptr);
         vkCmdDispatch(cmd, gx, gy, gz);
+        // Destino inclui COPY: a copia de diagnostico (statsBuf) abaixo tambem
+        // le m_bakeImage. So' COMPUTE era SYNC-HAZARD-READ-AFTER-WRITE.
         m_ctx->cmdImageBarrier(cmd, m_bakeImage, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
-                               VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                               VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+                               VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                               VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_COPY_BIT,
+                               VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                               VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT);
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_dilatePipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_dilatePipeLayout, 0, 1, &dilSet, 0, nullptr);
         vkCmdPushConstants(cmd, m_dilatePipeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(dimsPush), dimsPush);

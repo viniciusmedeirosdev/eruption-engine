@@ -1154,13 +1154,30 @@ void ShadowRenderer::renderCascades(VkCommandBuffer cmd, TerrainRenderer* terrai
                         if (m_settings.csmStable) minSize = texelFloor;
                     }
                 }
+                // m_shadowInstLayout tem push constants MAIORES que
+                // m_shadowLayout; layouts com faixas de push diferentes nao sao
+                // compativeis nem para o set 0. Sem religar, o set 1 do passe
+                // instanciado "perturbava" o set 0 bindless ligado acima
+                // (VUID-vkCmdDrawIndexed-None-08600). Religa com o layout de
+                // cada passe, antes e depois dos modelos.
+                const bool instLayout = m_shadowInstLayout != VK_NULL_HANDLE;
+                if (instLayout && m_bindless) {
+                    VkDescriptorSet bindlessSet = m_bindless->set();
+                    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_shadowInstLayout,
+                                            0, 1, &bindlessSet, 0, nullptr);
+                }
                 models->renderShadow(cmd,
                                      m_shadowInstPipeline != VK_NULL_HANDLE ? m_shadowInstPipeline : m_shadowPipeline,
-                                     m_shadowInstLayout != VK_NULL_HANDLE ? m_shadowInstLayout : m_shadowLayout,
+                                     instLayout ? m_shadowInstLayout : m_shadowLayout,
                                      renderMats[i], shadowFrustum, minSize, m_settings.enableShadowCulling,
                                      m_shadowInstPipeline != VK_NULL_HANDLE, frameUbo.windParams,
                                      kOpaqueShadowPipe && m_shadowInstPipeline != VK_NULL_HANDLE
                                          ? m_shadowInstOpaquePipeline : VK_NULL_HANDLE);
+                if (instLayout && m_bindless) {
+                    VkDescriptorSet bindlessSet = m_bindless->set();
+                    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_shadowLayout,
+                                            0, 1, &bindlessSet, 0, nullptr);
+                }
             }
 
             lap("models");

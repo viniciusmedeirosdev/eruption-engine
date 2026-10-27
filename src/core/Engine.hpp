@@ -672,6 +672,12 @@ private:
     // 3=settling PBR off, 4=capture PBR off.
     int m_abCaptureStep = 0;
     int m_abCaptureFrame = 0;
+    // A/B do SSAO na mesma execucao (ERUPTION_TEST_SSAO_AB, ver Render.cpp).
+    int m_ssaoAbStep = 0;
+    bool m_ssaoAbApplied = false;
+    int m_ssaoAbSamples = 0;
+    double m_ssaoAbLightingMs = 0.0;
+    double m_ssaoAbFrameMs = 0.0;
     std::unique_ptr<BackgroundMapLoader> m_backgroundLoader;
     std::unique_ptr<MapContext> m_activeMapContext;
     std::unique_ptr<MapContext> m_stagingMapContext;
@@ -913,6 +919,7 @@ private:
     bool  m_ssaoEnabled = true;
     float m_ssaoStrength = 0.8f;
     float m_ssaoRadius = 12.0f;  // unidades de MUNDO (celula de terreno = 10u)
+    bool  m_ssaoAcademicKernel = false; // true = 32 amostras + blur 5x5 (proposta academica)
     bool  m_envSpecEnabled = true;
     float m_envSpecIntensity = 1.0f;
     float m_nightAoContrast = 1.6f;   // AO exponent at night (1 = off)

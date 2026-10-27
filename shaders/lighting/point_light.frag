@@ -82,7 +82,7 @@ void main() {
     if (depth >= 0.99999) discard;
     // Visualizacao crua do G-buffer: so' o passe ambiente escreve (ver
     // ambient.frag). Luz pontual tambem soma, entao sai fora.
-    if ((lights.pbrDebugMode & 95u) != 0u) discard;
+    if ((lights.pbrDebugMode & 223u) != 0u) discard;
 
     vec4 albedo = texture(gbufferAlbedo, uv);
     // Diagnostico (bit 32 de pbrDebugMode, ERUPTION_DEBUG_FLAT_ALBEDO=1): albedo

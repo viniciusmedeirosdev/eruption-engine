@@ -191,6 +191,14 @@ void DeferredLighting::resize(uint32_t width, uint32_t height) {
     m_width = width;
     m_height = height;
     init(m_ctx, m_gbuffer, m_bindless, width, height);
+    // init() aloca descriptor sets NOVOS. Os bindings 15-17 (sonda de ceu e
+    // probes) so' eram escritos uma vez, no carregamento: depois de um resize
+    // os passes de luz liam descritores nunca atualizados
+    // (VUID-vkCmdDraw-None-08114, medido com validation layers ao redimensionar).
+    if (m_skyProbeBound)
+        setSkyProbe(m_skyProbeView, m_skyProbeSampler, m_skyProbeShBuffer, m_skyProbeShSize, m_skyProbeMipCount);
+    if (m_probeView != VK_NULL_HANDLE)
+        setIrradianceProbes(m_probeView, m_probeSampler, m_probeGridMin, m_probeGridInvExtent, m_probesEnabled);
 }
 
 void DeferredLighting::setEnvironment(const LightingEnvironment& env) {
@@ -843,6 +851,12 @@ void DeferredLighting::setSkyProbe(VkImageView cubeView, VkSampler sampler, VkBu
     }
     m_skyProbeMaxMip = static_cast<float>(mipCount > 0 ? mipCount - 1 : 0);
     m_skyProbeBound = true;
+    // Guardados para reescrever os sets recriados em resize().
+    m_skyProbeView = cubeView;
+    m_skyProbeSampler = sampler;
+    m_skyProbeShBuffer = shBuffer;
+    m_skyProbeShSize = shSize;
+    m_skyProbeMipCount = mipCount;
 }
 
 void DeferredLighting::setIrradianceProbes(VkImageView view, VkSampler sampler,
@@ -865,6 +879,8 @@ void DeferredLighting::setIrradianceProbes(VkImageView view, VkSampler sampler,
     m_probeGridMin = gridMin;
     m_probeGridInvExtent = gridInvExtent;
     m_probesEnabled = enabled;
+    m_probeView = view;       // reescrito em resize()
+    m_probeSampler = sampler;
 }
 
 void DeferredLighting::render(VkCommandBuffer cmd, const Camera& camera, const ShadowRenderer* shadows,
@@ -935,7 +951,7 @@ void DeferredLighting::render(VkCommandBuffer cmd, const Camera& camera, const S
     // permite validar headless que a leitura nao muda com a hora do dia.
     static const uint32_t kPbrDebugEnv = [] {
         const char* e = std::getenv("ERUPTION_TEST_PBR_DEBUG");
-        return e ? (static_cast<uint32_t>(std::atoi(e)) & 95u) : 0u; // 64 = AO cru
+        return e ? (static_cast<uint32_t>(std::atoi(e)) & 223u) : 0u; // 64 = AO cru, 128 = SSAO cru
     }();
     ubo.pbrDebugMode = m_pbrDebugMode | kFlatAlbedo | kPbrDebugEnv;
     ubo.pbrLightScale = m_pbrLightScale;
@@ -944,7 +960,8 @@ void DeferredLighting::render(VkCommandBuffer cmd, const Camera& camera, const S
     ubo.temperatureC = m_temperatureC;
     ubo.ambientSky = Vec4(m_env.ambientSkyColor, 0.0f);
     ubo.ambientGround = Vec4(m_env.ambientGroundColor, 0.0f);
-    ubo.ssaoParams = Vec4(m_ssaoEnabled ? 1.0f : 0.0f, m_ssaoStrength, m_ssaoRadius, 0.0f);
+    ubo.ssaoParams = Vec4(m_ssaoEnabled ? 1.0f : 0.0f, m_ssaoStrength, m_ssaoRadius,
+                          m_ssaoAcademicKernel ? 1.0f : 0.0f);
     ubo.indirectParams = Vec4(m_envSpecEnabled ? 1.0f : 0.0f, m_envSpecIntensity,
                               m_nightAoPow, m_ambientHemiFloor);
     ubo.viewProj = camera.viewProjJittered();
@@ -960,11 +977,15 @@ void DeferredLighting::render(VkCommandBuffer cmd, const Camera& camera, const S
     std::memcpy(m_lightingUboMappeds[frameIndex], &ubo, sizeof(LightingUBO));
     vmaFlushAllocation(m_ctx->allocator(), m_lightingUboAllocs[frameIndex], 0, sizeof(LightingUBO));
 
-    // Transition lit image to color attachment
+    // Transition lit image to color attachment. Origem = quem usou a imagem no
+    // quadro anterior (forward/post: attachment, fragment, compute, copia de
+    // screenshot); TOP_OF_PIPE nao ordenava a transicao contra esses acessos.
     m_ctx->cmdImageBarrier(cmd, m_litImage,
         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 
     // Transition G-Buffer to read
     m_gbuffer->transitionToRead(cmd);

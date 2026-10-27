@@ -212,9 +212,12 @@ void Engine::render() {
         }
         m_renderW = w; m_renderH = h;
         m_gbuffer.resize(w, h); m_deferredLighting.resize(w, h); m_skybox.resize(w, h);
-        m_cameraMotion.resize(w, h);
+        // Views NOVOS do G-buffer antes do resize: CameraMotion::resize()
+        // reescreve o descriptor set e usava o depth view ja' destruido por
+        // m_gbuffer.resize() (VUID-VkWriteDescriptorSet-descriptorType-02996).
         m_cameraMotion.bindDepth(m_gbuffer.depthView());
         m_cameraMotion.bindObjectVelocity(m_gbuffer.velocityView());
+        m_cameraMotion.resize(w, h);
         const VkExtent2D disp = m_vulkan.swapExtent();
         if (m_upscalerMode == UpscalerMode::FsrBeforePost) {
             m_postProcessor.resize(disp.width, disp.height);
@@ -461,6 +464,7 @@ void Engine::render() {
     m_deferredLighting.setIndirectParams(m_ssaoEnabled, m_ssaoStrength, m_ssaoRadius,
                                          m_envSpecEnabled, m_envSpecIntensity,
                                          m_nightAoContrast, m_ambientHemiFloor);
+    m_deferredLighting.setSsaoAcademicKernel(m_ssaoAcademicKernel);
     m_deferredLighting.setBounceParams(m_sunBounceEnabled, m_sunBounceStrength);
     // ERUPTION_TEST_CONTACT_LENGTH=<unidades de mundo> (debug): varre o alcance
     // da marcha sem passar pelo slider do ImGui (que exige display e mao humana).
@@ -842,6 +846,13 @@ void Engine::render() {
     }
 
     m_vulkan.cmdImageBarrier(cmd, m_gbuffer.depthImage(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+    // O passe forward abre a imagem iluminada com loadOp LOAD: precisa ver o
+    // que a iluminacao diferida escreveu. Duas instancias de dynamic rendering
+    // nao se sincronizam sozinhas (SYNC-HAZARD-READ-AFTER-WRITE).
+    m_vulkan.cmdImageBarrier(cmd, m_deferredLighting.litImage(),
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
     m_vulkan.cmdBeginRendering(cmd, {colorAttachment}, &depthAttachment, nullptr, renderExtent());
 
     // Water forward pass (transparent) — BEFORE skybox so depth buffer still has terrain
@@ -1064,7 +1075,9 @@ void Engine::render() {
     // Return depth buffer to a READ-ONLY attachment layout: the cloud planes
     // depth-test (no writes) and the volumetric puff shader samples the same
     // depth image via descriptor — legal only with a read-only attachment.
-    m_vulkan.cmdImageBarrier(cmd, m_gbuffer.depthImage(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+    // EARLY_FRAGMENT_TESTS no destino: o loadOp LOAD do depth acontece nesse
+    // estagio (SYNC-HAZARD-READ-AFTER-WRITE quando so' LATE estava listado).
+    m_vulkan.cmdImageBarrier(cmd, m_gbuffer.depthImage(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     // Render the cloud coverage plane after scene objects so it layers correctly.
     // cloudVolOccReady: set when the cloud volume accumulation texture holds
@@ -1084,7 +1097,7 @@ void Engine::render() {
         planeDepthAttach.imageView = m_gbuffer.depthView();
         planeDepthAttach.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
         planeDepthAttach.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        planeDepthAttach.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        planeDepthAttach.storeOp = VK_ATTACHMENT_STORE_OP_NONE; // somente leitura: STORE contava como escrita (SYNC-HAZARD-WRITE-AFTER-WRITE)
 
         VkRenderingInfo planeInfo{};
         planeInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -1408,7 +1421,7 @@ void Engine::render() {
     const VkImageView postHdrInput = m_upscalerMode == UpscalerMode::FsrBeforePost
                                          ? m_fsr.outputView()
                                          : m_deferredLighting.litImageView();
-    m_vulkan.cmdImageBarrier(cmd, m_vulkan.swapImage(imageIndex), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    m_vulkan.cmdImageBarrier(cmd, m_vulkan.swapImage(imageIndex), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT); // src = estagio da espera do semaforo do acquire (SYNC-HAZARD-WRITE-AFTER-READ); READ: o ImGui usa loadOp LOAD
 
     PostProcessor::PostSettings postSettings = m_postSettings;
     postSettings.fogColor = m_dayNightCycle.getFogColor();
@@ -1607,7 +1620,7 @@ void Engine::render() {
         m_vulkan.writeTimestamp(cmd, 43, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
         Profiler::addGpuTime("FSR", m_vulkan.timestampDeltaMs(42, 43));
     }
-    m_vulkan.cmdImageBarrier(cmd, m_vulkan.swapImage(imageIndex), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    m_vulkan.cmdImageBarrier(cmd, m_vulkan.swapImage(imageIndex), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT); // src = estagio da espera do semaforo do acquire (SYNC-HAZARD-WRITE-AFTER-READ); READ: o ImGui usa loadOp LOAD
     // Com FSR a imagem ja' chega com anti-aliasing e na resolucao de display:
     // o UpscaleAA so' copia (FXAA desligado, Catmull-Rom 1:1, sem nitidez).
     const bool upscaleFromFsr = m_upscalerMode == UpscalerMode::FsrAfterPost;
@@ -2313,6 +2326,61 @@ void Engine::render() {
         }
     }
 
+    // A/B DO SSAO NA MESMA EXECUCAO. ERUPTION_TEST_SSAO_AB=<pasta>: a partir do
+    // quadro ERUPTION_TEST_SCREENSHOT_FRAME (padrao 1500), cada estado fica
+    // ativo por kSettle quadros e e' capturado no ultimo; depois a engine
+    // encerra. Duas execucoes separadas nao isolam o SSAO: o estado das
+    // texturas varia entre execucoes (medido: OFF x OFF de execucoes
+    // diferentes ~0,011 de diferenca media de luminancia). O par OFF/OFF-ref
+    // mede o que ainda muda entre quadros da mesma execucao (o piso de ruido).
+    // O log registra, por estado, a media do tempo de GPU da iluminacao
+    // diferida (inclui os passes SSAO e blur) e do tempo de quadro.
+    static const char* kSsaoAbDir = std::getenv("ERUPTION_TEST_SSAO_AB");
+    if (kSsaoAbDir && *kSsaoAbDir && m_currentMap) {
+        struct SsaoAbState { bool ssao; bool academic; const char* file; };
+        static const SsaoAbState kStates[] = {
+            {false, false, "ssao-off.png"},
+            {false, false, "ssao-off-ref.png"},
+            {true,  false, "ssao-on.png"},
+            {true,  true,  "ssao-on-academic.png"},
+        };
+        constexpr int kCount = static_cast<int>(sizeof(kStates) / sizeof(kStates[0]));
+        constexpr int kSettle = 120;     // quadros por estado
+        constexpr int kMeasureFrom = 20; // descarta os primeiros quadros apos a troca
+        static const int kStart = [] {
+            const char* e = std::getenv("ERUPTION_TEST_SCREENSHOT_FRAME");
+            return (e && std::atoi(e) > 0) ? std::atoi(e) : 1500;
+        }();
+        if (m_ssaoAbStep < kCount) {
+            const SsaoAbState& s = kStates[m_ssaoAbStep];
+            const int begin = kStart + m_ssaoAbStep * kSettle;
+            if (!m_ssaoAbApplied && m_framesCount >= begin) {
+                m_ssaoEnabled = s.ssao;
+                m_ssaoAcademicKernel = s.academic;
+                m_ssaoAbApplied = true;
+                m_ssaoAbSamples = 0;
+                m_ssaoAbLightingMs = m_ssaoAbFrameMs = 0.0;
+            } else if (m_ssaoAbApplied && m_framesCount >= begin + kMeasureFrom &&
+                       m_framesCount < begin + kSettle) {
+                m_ssaoAbLightingMs += Profiler::getGpuTime("Deferred Lighting");
+                // Mesma definicao de gpu_total_ms do TelemetryExporter.
+                for (const auto& kv : Profiler::getAllGpuTimes()) m_ssaoAbFrameMs += kv.second;
+                ++m_ssaoAbSamples;
+            } else if (m_ssaoAbApplied && m_framesCount >= begin + kSettle) {
+                const std::string path = std::string(kSsaoAbDir) + "/" + s.file;
+                takeScreenshot(path);
+                const double n = std::max(1, m_ssaoAbSamples);
+                ERUPTION_LOG_WARN("[SSAO-AB] %s ssao=%d kernel=%s radius=%.2f strength=%.2f "
+                                  "gpu_deferred_lighting_ms=%.3f gpu_total_ms=%.3f amostras=%d",
+                                  path.c_str(), s.ssao ? 1 : 0, s.academic ? "32/5x5" : "12/3x3",
+                                  m_ssaoRadius, m_ssaoStrength, m_ssaoAbLightingMs / n,
+                                  m_ssaoAbFrameMs / n, m_ssaoAbSamples);
+                m_ssaoAbApplied = false;
+                if (++m_ssaoAbStep == kCount) m_running = false;
+            }
+        }
+    }
+
     if (m_screenshotPending) finishPendingScreenshot();
 
     // ERUPTION_TEST_DUMP_FRAMES=<dir> (debug): grava TODO frame como PNG.
@@ -2356,6 +2424,8 @@ void Engine::render() {
 //   weather=<nome>  troca de clima (mesmo caminho do ciclo de teste)
 //   baselod=0|1   forca a malha cheia (sem LOD) em tudo
 //   exit=1        encerra a execucao
+//   ssao=0|1, ssao_radius=<u>, ssao_strength=<f>, ssao_quality=engine|academic
+//   size=<L>x<A>  redimensiona a janela; minimize=1 / restore=1
 void Engine::runDemoTimeline(const char* spec) {
     struct Ev { float t; std::string key, val; bool done = false; };
     struct Cam { float t; float p[6]; };
@@ -2435,6 +2505,20 @@ void Engine::runDemoTimeline(const char* spec) {
         // corte quase some da tela ("a iluminacao dinamica nem ta fazendo
         // diferenca", autor 2026-09-06). Travada, apagar a luz apaga a cena.
         else if (ev.key == "autoexp") m_autoExposureEnabled = on;
+        // Controles do SSAO e da janela: permitem um teste de estabilidade
+        // automatizado (alternar efeito/parametros, redimensionar, minimizar)
+        // sob as validation layers, sem depender de mao humana na UI.
+        else if (ev.key == "ssao") m_ssaoEnabled = on;
+        else if (ev.key == "ssao_radius") m_ssaoRadius = std::strtof(ev.val.c_str(), nullptr);
+        else if (ev.key == "ssao_strength") m_ssaoStrength = std::strtof(ev.val.c_str(), nullptr);
+        else if (ev.key == "ssao_quality") m_ssaoAcademicKernel = ev.val == "academic";
+        else if (ev.key == "size" && m_vulkan.window()) {
+            int w = 0, h = 0;
+            if (std::sscanf(ev.val.c_str(), "%dx%d", &w, &h) == 2 && w > 0 && h > 0)
+                glfwSetWindowSize(m_vulkan.window(), w, h);
+        }
+        else if (ev.key == "minimize" && m_vulkan.window()) glfwIconifyWindow(m_vulkan.window());
+        else if (ev.key == "restore" && m_vulkan.window()) glfwRestoreWindow(m_vulkan.window());
         else if (ev.key == "exit") m_running = false;
     }
 }

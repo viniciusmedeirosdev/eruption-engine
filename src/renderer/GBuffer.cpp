@@ -211,9 +211,13 @@ void GBuffer::transitionToWrite(VkCommandBuffer cmd) {
     auto addColor = [&](VkImage image) {
         VkImageMemoryBarrier2 b{};
         b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        b.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        // Origem = tudo que tocou a imagem no quadro anterior: escrita de
+        // attachment (WAW) e leituras de fragment/compute (WAR). TOP_OF_PIPE
+        // nao cria dependencia nenhuma (SYNC-HAZARD-WRITE-AFTER-WRITE).
+        b.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
         b.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        b.srcAccessMask = 0;
+        b.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         b.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         b.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         b.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -232,9 +236,10 @@ void GBuffer::transitionToWrite(VkCommandBuffer cmd) {
 
     VkImageMemoryBarrier2 depthB{};
     depthB.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    depthB.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    depthB.srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT |
+                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     depthB.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-    depthB.srcAccessMask = 0;
+    depthB.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     depthB.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     depthB.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depthB.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;

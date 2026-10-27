@@ -153,3 +153,7 @@ build-ssao/
 build-ci/
 evidencias/
 dist/
+
+# Build no Windows (MSYS2/MinGW) e saidas locais da demonstracao SSAO
+*.exe
+build-win/

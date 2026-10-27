@@ -7,7 +7,8 @@ for tool in cmake g++ python3; do
     command -v "$tool" >/dev/null || { echo "Falta $tool. Consulte docs/ENTREGA_SSAO.md." >&2; exit 1; }
 done
 cmake -S "$ROOT" -B "$BUILD_DIR" -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DERUPTION_BUILD_TESTS=ON -DERUPTION_FETCH_DEMO_MAP=ON
+    -DERUPTION_BUILD_TESTS=ON -DERUPTION_FETCH_DEMO_MAP=ON \
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 cmake --build "$BUILD_DIR" --parallel "${BUILD_JOBS:-2}"
 ctest --test-dir "$BUILD_DIR" --output-on-failure
 if command -v spirv-val >/dev/null; then

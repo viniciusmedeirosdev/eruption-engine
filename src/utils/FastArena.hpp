@@ -7,6 +7,8 @@
 #include <cassert>
 #include <stdexcept>
 
+#include "utils/Platform.hpp"
+
 namespace eruption {
 
 class FastArena {
@@ -15,7 +17,7 @@ public:
         // Garante que o tamanho seja múltiplo de 64 (exigência do std::aligned_alloc)
         size_t aligned_size = (size + 63) & ~size_t(63);
         
-        m_memory = static_cast<std::byte*>(std::aligned_alloc(64, aligned_size));
+        m_memory = static_cast<std::byte*>(platform::alignedAlloc(64, aligned_size));
         if (!m_memory) throw std::bad_alloc();
         
         m_head = m_memory;
@@ -23,7 +25,7 @@ public:
         m_end = m_memory + m_size;
     }
 
-    ~FastArena() { std::free(m_memory); }
+    ~FastArena() { platform::alignedFree(m_memory); }
 
     FastArena(const FastArena&) = delete;
     FastArena& operator=(const FastArena&) = delete;

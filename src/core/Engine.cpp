@@ -162,6 +162,8 @@ Engine::Engine() {
     if (const char* e = std::getenv("ERUPTION_TEST_SSAO")) m_ssaoEnabled = std::stof(e) != 0.0f;
     if (const char* e = std::getenv("ERUPTION_TEST_SSAO_STRENGTH")) m_ssaoStrength = std::stof(e);
     if (const char* e = std::getenv("ERUPTION_TEST_SSAO_RADIUS")) m_ssaoRadius = std::stof(e);
+    // "academic" = 32 amostras + blur 5x5; qualquer outro valor = padrao da engine.
+    if (const char* e = std::getenv("ERUPTION_TEST_SSAO_QUALITY")) m_ssaoAcademicKernel = std::string(e) == "academic";
     if (const char* e = std::getenv("ERUPTION_TEST_ENV_SPEC")) m_envSpecEnabled = std::stof(e) != 0.0f;
     if (const char* e = std::getenv("ERUPTION_TEST_SUN_BOUNCE")) m_sunBounceEnabled = std::stof(e) != 0.0f;
     if (const char* e = std::getenv("ERUPTION_TEST_CONTACT_SHADOW")) m_contactShadowEnabled = std::stof(e) != 0.0f;

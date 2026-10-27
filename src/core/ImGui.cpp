@@ -330,6 +330,8 @@ void Engine::drawLightingControls() {
     if (m_ssaoEnabled) {
         ImGui::SliderFloat("  AO Strength", &m_ssaoStrength, 0.0f, 3.0f, "%.2f");
         ImGui::SliderFloat("  AO Radius (world units)", &m_ssaoRadius, 0.5f, 60.0f, "%.1f u");
+        ImGui::Checkbox("  Academic kernel (32 samples, 5x5 blur)", &m_ssaoAcademicKernel);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Off: engine default, 12 samples + 3x3 bilateral blur.\nOn: configuration proposed in the academic deliverables, 32 samples + 5x5 bilateral blur.");
     }
 
     ImGui::Checkbox("Environment Specular (IBL)", &m_envSpecEnabled);
@@ -390,11 +392,14 @@ void Engine::drawLightingControls() {
     ImGui::SameLine();
     bool dAO = (dbg & 64u) != 0;
     if (ImGui::Checkbox("Show AO (cinza)", &dAO)) dbg ^= 64u;
+    bool dSsao = (dbg & 128u) != 0;
+    if (ImGui::Checkbox("Show SSAO buffer", &dSsao)) dbg ^= 128u;
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Raw half-res SSAO after the bilateral blur (white = unoccluded).");
     m_deferredLighting.setPbrDebugMode(dbg);
     // O composite precisa saber para pular fog/tonemap/bloom: sem isso a
     // visualizacao ainda mudaria com a hora do dia (o fog tinge o longe com a
     // cor do ceu). Ver post_composite.frag.
-    m_postSettings.pbrDebugActive = (dbg & 95u) != 0u;
+    m_postSettings.pbrDebugActive = (dbg & 223u) != 0u;
 
     float pbrScale = m_deferredLighting.pbrLightScale();
     if (ImGui::SliderFloat("PBR Light Scale", &pbrScale, 0.0f, 10.0f, "%.2f")) {
@@ -622,6 +627,9 @@ void Engine::renderImGui() {
                                                       "Celula de terreno = 10u, arvore = 40u.\n"
                                                       "Abaixo de ~5 nao ha' contato visivel.");
                                 ImGui::SliderFloat("SSAO Strength", &m_ssaoStrength, 0.0f, 3.0f, "%.2f");
+                                ImGui::Checkbox("Kernel academico (32 amostras, blur 5x5)", &m_ssaoAcademicKernel);
+                                ImGui::SetItemTooltip("Desligado: padrao da engine, 12 amostras + blur 3x3.\n"
+                                                      "Ligado: configuracao das entregas academicas, 32 amostras + blur 5x5.");
                             }
                             ImGui::Separator();
 

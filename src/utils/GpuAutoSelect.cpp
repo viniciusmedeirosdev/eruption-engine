@@ -10,8 +10,20 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
 #include <unistd.h>
 #include <linux/limits.h>
+#endif
+
+#include "utils/Platform.hpp"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -125,10 +137,19 @@ int GpuAutoSelect::pickBestGpuIndex(const std::vector<GpuInfo>& gpus) {
 }
 
 std::string GpuAutoSelect::getExecutablePath() {
+#ifdef _WIN32
+    char path[MAX_PATH + 1]{};
+    const DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH) return {};
+    std::string exe(path, static_cast<size_t>(len));
+    std::replace(exe.begin(), exe.end(), '\\', '/'); // getConfigPath() procura '/'
+    return exe;
+#else
     char path[PATH_MAX + 1]{};
     ssize_t len = readlink("/proc/self/exe", path, PATH_MAX);
     if (len <= 0) return {};
     return std::string(path, static_cast<size_t>(len));
+#endif
 }
 
 std::string GpuAutoSelect::getConfigPath() {
@@ -223,8 +244,8 @@ bool GpuAutoSelect::ensureBestGpu() {
             std::getenv("__NV_PRIME_RENDER_OFFLOAD") == nullptr &&
             std::getenv("__VK_LAYER_NV_optimus") == nullptr) {
             ERUPTION_LOG_WARN("[GpuAutoSelect] Hybrid NVIDIA+Intel detected; enabling PRIME render offload");
-            setenv("__NV_PRIME_RENDER_OFFLOAD", "1", 1);
-            setenv("__VK_LAYER_NV_optimus", "NVIDIA_only", 1);
+            platform::setEnv("__NV_PRIME_RENDER_OFFLOAD", "1");
+            platform::setEnv("__VK_LAYER_NV_optimus", "NVIDIA_only");
             // Re-enumerate so the device order reflects the offload layer and
             // the auto-selected index points at the correct physical device.
             gpus = enumerateGpus();
@@ -242,7 +263,7 @@ bool GpuAutoSelect::ensureBestGpu() {
 
     // Make sure ERUPTION_GPU_INDEX is set so VulkanContext uses the right device.
     if (!cfgIndex.empty() && std::getenv("ERUPTION_GPU_INDEX") == nullptr) {
-        setenv("ERUPTION_GPU_INDEX", cfgIndex.c_str(), 1);
+        platform::setEnv("ERUPTION_GPU_INDEX", cfgIndex.c_str());
     }
 
     if (autoDetected) {

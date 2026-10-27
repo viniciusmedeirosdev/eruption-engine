@@ -4,6 +4,7 @@
 #include "game/PlayerController.hpp"
 #include "core/Engine.hpp"
 #include "core/Logger.hpp"
+#include "utils/Platform.hpp"
 #include "core/Input.hpp"
 #include "formats/TerrainParser.hpp"
 #include <imgui.h>
@@ -53,7 +54,7 @@ void DefaultApplication::parseArgs(int argc, char** argv) {
             m_autoExit = true;
         } else if (arg == "--telemetry" && i + 1 < argc) {
             // Same switch the perf/ harness uses via env var.
-            setenv("ERUPTION_TELEMETRY_OUT", argv[++i], 1);
+            eruption::platform::setEnv("ERUPTION_TELEMETRY_OUT", argv[++i]);
         } else if (arg == "--warp-on-load" && i + 1 < argc) {
             m_warpOnLoad = argv[++i];
         } else if (arg == "--dump-frames" && i + 2 < argc) {

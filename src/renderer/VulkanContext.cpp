@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <csignal>
 #include <chrono>
+#include <thread>
 #include "core/Logger.hpp"
 
 #define GLFW_INCLUDE_VULKAN
@@ -205,6 +206,12 @@ void VulkanContext::shutdown() {
 
 bool VulkanContext::beginFrame() {
     if (m_deviceLost) return false;
+    // Minimizada: nao ha' o que apresentar. Pula o frame sem esperar fence nem
+    // adquirir imagem, e cede a CPU em vez de girar o laco a toda velocidade.
+    if (isMinimized()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return false;
+    }
 
     // ERUPTION_DEBUG_PRESENT=1: mede onde o frame realmente para. Existe um
     // custo fixo de ~6,5 ms por frame que NAO depende de cena, clima, preset
@@ -227,7 +234,12 @@ bool VulkanContext::beginFrame() {
     }
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        return recreateSwapchain();
+        // Nenhuma imagem foi adquirida e o command buffer deste slot NAO foi
+        // iniciado: recria a swapchain e pula o frame. Antes retornava o
+        // resultado da recriacao (true), e o Render gravava comandos num
+        // command buffer sem vkBeginCommandBuffer, submetendo-o em seguida.
+        recreateSwapchain();
+        return false;
     } else if (result == VK_ERROR_DEVICE_LOST) {
         ERUPTION_LOG_ERROR("Vulkan device lost");
         m_deviceLost = true;
@@ -815,6 +827,11 @@ bool VulkanContext::createLogicalDevice() {
     features13.dynamicRendering = m_supportedFeatures13.dynamicRendering;
     features13.synchronization2 = m_supportedFeatures13.synchronization2;
     features13.maintenance4 = m_supportedFeatures13.maintenance4;
+    // glslc com --target-env=vulkan1.3 emite a capability
+    // DemoteToHelperInvocation em shaders com `discard`. A feature e'
+    // obrigatoria no Vulkan 1.3, mas precisa ser HABILITADA no device:
+    // sem isto, vkCreateShaderModule viola VUID-VkShaderModuleCreateInfo-pCode-08740.
+    features13.shaderDemoteToHelperInvocation = m_supportedFeatures13.shaderDemoteToHelperInvocation;
     // FSR 3.1: os passes do SDK leem alem da borda em alguns pontos (SPD mip 5,
     // RCAS, borda 3x3 do prepare_inputs). No D3D isso devolve 0; no Vulkan e'
     // indefinido sem robustImageAccess. Opcional: sem ele o FSR roda igual ao
@@ -1101,6 +1118,11 @@ void VulkanContext::cleanupSwapchain() {
 }
 
 bool VulkanContext::recreateSwapchain() {
+    // Janela minimizada: a superficie reporta extent 0x0 e uma swapchain com
+    // imageExtent zero e' invalida (VUID-VkSwapchainCreateInfoKHR-imageExtent-01689).
+    // Mantem a swapchain atual; a recriacao acontece quando a janela voltar.
+    if (isMinimized()) return false;
+
     waitIdle();
 
     cleanupSwapchain();
@@ -1333,7 +1355,11 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanContext::debugCallback(
         static const char* brk = std::getenv("ERUPTION_VK_BREAK");
         if (brk && pCallbackData->pMessage && std::strstr(pCallbackData->pMessage, brk)) {
             ERUPTION_LOG_ERROR("[Validation][BREAK] %s", pCallbackData->pMessage);
+#ifdef SIGTRAP
             raise(SIGTRAP);
+#else
+            raise(SIGABRT);
+#endif
         }
         ERUPTION_LOG_ERROR("[Validation] %s", pCallbackData->pMessage);
     } else if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
@@ -1470,6 +1496,17 @@ void VulkanContext::dumpVmaStats(const char* path) const {
     if (!json) return;
     if (FILE* f = std::fopen(path, "wb")) { std::fputs(json, f); std::fclose(f); }
     vmaFreeStatsString(m_allocator, json);
+}
+
+} // namespace eruption
+
+namespace eruption {
+
+bool VulkanContext::isMinimized() const {
+    if (!m_window) return false;
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(m_window, &width, &height);
+    return width == 0 || height == 0;
 }
 
 } // namespace eruption

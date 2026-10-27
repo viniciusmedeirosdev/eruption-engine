@@ -175,6 +175,8 @@ public:
     // Swapchain control (public for manual resize)
     void cleanupSwapchain();
     bool recreateSwapchain();
+    // true quando o framebuffer da janela tem area zero (minimizada).
+    bool isMinimized() const;
 
 private:
     // Window handle

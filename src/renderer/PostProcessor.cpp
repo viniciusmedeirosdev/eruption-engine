@@ -89,6 +89,10 @@ bool PostProcessor::init(VulkanContext* ctx, uint32_t width, uint32_t height) {
 void PostProcessor::shutdown() {
     if (!m_ctx) return;
     auto device = m_ctx->device();
+    // Os descriptor sets morrem com o pool: depois de resize() os buffers do
+    // clima (bindings 4 e 6) precisam ser escritos de novo nos sets novos
+    // (sem isto: VUID-vkCmdDraw-None-08114 no overlay de clima apos resize).
+    m_weatherBufferDSWritten = false;
     destroyAutoExposure();
 
     vkDestroyPipeline(device, m_cocPipeline, nullptr);
@@ -1347,7 +1351,7 @@ if (!m_ctx) return;
     // antes de fog/tonemap/grading. ERUPTION_TEST_PBR_DEBUG=<mask> liga sem UI.
     static const bool kPbrDebugEnv = [] {
         const char* e = std::getenv("ERUPTION_TEST_PBR_DEBUG");
-        return e && (std::atoi(e) & 31) != 0;
+        return e && (std::atoi(e) & 223) != 0; // mesma mascara dos shaders (64 = AO, 128 = SSAO)
     }();
     if (settings.pbrDebugActive || kPbrDebugEnv) push.gradingParams.z = 1.0f;
     vkCmdPushConstants(cmd, m_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
@@ -1967,6 +1971,15 @@ void PostProcessor::dispatchAutoExposure(VkCommandBuffer cmd, VkImageView hdrVie
 
     // Guarantee a clean histogram (adaptation clears it each frame, but frame 0
     // starts undefined; the fill is 1KB, negligible).
+    // O mesmo buffer foi usado pelo compute (e pelo fill) do quadro anterior:
+    // sem esta barreira o fill nao espera esses acessos (SYNC-HAZARD-WRITE-AFTER-WRITE).
+    {
+        VkMemoryBarrier pre{}; pre.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        pre.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+        pre.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &pre, 0, nullptr, 0, nullptr);
+    }
     vkCmdFillBuffer(cmd, m_lumHistBuffer, 0, 256 * sizeof(uint32_t), 0u);
     VkMemoryBarrier mb{}; mb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
     mb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;

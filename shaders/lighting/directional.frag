@@ -543,7 +543,7 @@ void main() {
     // Visualizacao crua do G-buffer: quem desenha e' o passe AMBIENTE (ver
     // ambient.frag). Este passe SOMA por cima, entao aqui so' pode sair zero -
     // senao a leitura mudaria com o sol e com a sombra, que era o bug.
-    if ((lights.pbrDebugMode & 95u) != 0u) { outLit = vec4(0.0); return; }
+    if ((lights.pbrDebugMode & 223u) != 0u) { outLit = vec4(0.0); return; }
     // Diagnostico (bit 32 de pbrDebugMode, ERUPTION_DEBUG_FLAT_ALBEDO=1): albedo
     // CIANO chapado em tudo - modelo, terreno, sprite - so' a iluminacao e a
     // sombra sobrevivem. Isola cintilacao de sombra de cintilacao de textura.

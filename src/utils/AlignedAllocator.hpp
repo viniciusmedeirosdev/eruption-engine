@@ -6,6 +6,8 @@
 #include <new>
 #include <type_traits>
 
+#include "utils/Platform.hpp"
+
 namespace eruption {
 
 // Simple STL-compatible allocator that guarantees a minimum alignment.
@@ -21,13 +23,13 @@ struct AlignedAllocator {
     T* allocate(std::size_t n) {
         if (n > std::size_t(-1) / sizeof(T)) throw std::bad_alloc();
         std::size_t bytes = n * sizeof(T);
-        void* ptr = std::aligned_alloc(Alignment, bytes);
+        void* ptr = platform::alignedAlloc(Alignment, bytes);
         if (!ptr) throw std::bad_alloc();
         return static_cast<T*>(ptr);
     }
 
     void deallocate(T* ptr, std::size_t) noexcept {
-        std::free(ptr);
+        platform::alignedFree(ptr);
     }
 
     template <typename U, typename... Args>

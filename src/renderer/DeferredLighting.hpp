@@ -6,6 +6,7 @@
 #include "math/Types.hpp"
 #include "math/Frustum.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <vector>
 
@@ -69,7 +70,7 @@ struct LightingUBO {
     uint32_t pad1;
     alignas(16) Vec4 ambientSky;        // xyz=skyColor, w=unused
     alignas(16) Vec4 ambientGround;     // xyz=groundColor, w=unused
-    alignas(16) Vec4 ssaoParams;        // x=enabled(0/1), y=strength, z=radius, w=unused
+    alignas(16) Vec4 ssaoParams;        // x=enabled(0/1), y=strength, z=radius, w=kernel (0=12 amostras/3x3, 1=32/5x5)
     alignas(16) Vec4 indirectParams;   // x=envSpecEnabled, y=envSpecIntensity, z=nightAoPow, w=ambientHemiFloor
     alignas(16) Mat4 viewProj;         // camera view-projection (SSAO reprojection, contact shadows)
     alignas(16) Vec4 bounceParams;     // x=sunBounceEnabled, y=sunBounceStrength, z=fillLightIntensity, w=unused
@@ -167,6 +168,10 @@ public:
         m_envSpecEnabled = envSpec; m_envSpecIntensity = envSpecIntensity;
         m_nightAoPow = nightAoPow; m_ambientHemiFloor = ambientHemiFloor;
     }
+    // Kernel do SSAO: false = padrao da engine (12 amostras, blur 3x3);
+    // true = configuracao da proposta academica (32 amostras, blur 5x5).
+    // Vai para ssaoParams.w; ssao.frag e ssao_blur.frag leem o mesmo valor.
+    void setSsaoAcademicKernel(bool academic) { m_ssaoAcademicKernel = academic; }
     void setBounceParams(bool enabled, float strength) {
         m_sunBounceEnabled = enabled; m_sunBounceStrength = strength;
     }
@@ -259,6 +264,15 @@ private:
     float m_probeStrength = 1.0f;
     Vec3 m_probeGridMin = Vec3(0.0f);
     Vec3 m_probeGridInvExtent = Vec3(0.0f);
+    // Ultimos recursos de setSkyProbe()/setIrradianceProbes(), reaplicados
+    // aos descriptor sets recriados por resize(). Nao sao donos dos handles.
+    VkImageView m_skyProbeView = VK_NULL_HANDLE;
+    VkSampler m_skyProbeSampler = VK_NULL_HANDLE;
+    VkBuffer m_skyProbeShBuffer = VK_NULL_HANDLE;
+    VkDeviceSize m_skyProbeShSize = 0;
+    uint32_t m_skyProbeMipCount = 0;
+    VkImageView m_probeView = VK_NULL_HANDLE;
+    VkSampler m_probeSampler = VK_NULL_HANDLE;
     float m_solarIntensity = 1.0f; // Track solar intensity for artificial mod
     // Raio angular da fonte de sol, em radianos. Default = disco solar real
     // (0,53 grau). O preset diorama sobe isso pra fingir softbox.
@@ -280,6 +294,7 @@ private:
     bool  m_ssaoNeutralCleared = false;
     float m_ssaoStrength = 0.8f;
     float m_ssaoRadius = 12.0f;  // unidades de MUNDO (celula de terreno = 10u)
+    bool  m_ssaoAcademicKernel = false;
     bool  m_envSpecEnabled = true;
     float m_envSpecIntensity = 1.0f;
     float m_nightAoPow = 1.6f;

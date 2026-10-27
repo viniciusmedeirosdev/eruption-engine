@@ -58,7 +58,7 @@ void Engine::presentLoadingScreen(const std::string& mapName, const std::string&
         colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     }
 
-    m_vulkan.cmdImageBarrier(cmd, m_vulkan.swapImage(imageIndex), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    m_vulkan.cmdImageBarrier(cmd, m_vulkan.swapImage(imageIndex), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT); // src = estagio da espera do semaforo do acquire (SYNC-HAZARD-WRITE-AFTER-READ); READ: o ImGui usa loadOp LOAD
     m_vulkan.cmdBeginRendering(cmd, {colorAttachment}, nullptr, nullptr, m_vulkan.swapExtent());
 
     renderLoadingUI(mapName, task, progress);

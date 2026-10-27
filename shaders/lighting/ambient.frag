@@ -130,7 +130,7 @@ void main() {
     // ANTES de qualquer luz. Os passes direcional e pontual devolvem zero
     // quando qualquer destes bits esta' ligado, e o composite pula
     // fog/tonemap/bloom, entao a leitura e' identica a qualquer hora do dia.
-    if ((lights.pbrDebugMode & 95u) != 0u) {
+    if ((lights.pbrDebugMode & 223u) != 0u) {
         vec4 dpbr = texture(gbufferPBR, inUV);
         vec3 dbg = vec3(0.0);
         if ((lights.pbrDebugMode & 1u)  != 0u) dbg += vec3(dpbr.g, 0.0, 0.0);    // roughness
@@ -139,6 +139,9 @@ void main() {
         if ((lights.pbrDebugMode & 8u)  != 0u) dbg += vec3(0.0, dpbr.a, dpbr.a); // wetness/cavidade
         if ((lights.pbrDebugMode & 16u) != 0u) dbg += vec3(dpbr.r, 0.0, dpbr.r);
         if ((lights.pbrDebugMode & 64u) != 0u) dbg += vec3(albedo.a); // AO final do G-buffer // flag de origem
+        // 128 = SSAO cru: o buffer filtrado (ssao_blur.frag) que os passes de
+        // luz multiplicam. Branco = sem oclusao. ERUPTION_TEST_PBR_DEBUG=128.
+        if ((lights.pbrDebugMode & 128u) != 0u) dbg += vec3(texture(ssaoTex, inUV).r);
         outLit = vec4(clamp(dbg, 0.0, 1.0), 1.0);
         return;
     }
