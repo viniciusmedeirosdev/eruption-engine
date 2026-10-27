@@ -1,0 +1,1049 @@
+TEXTO EXTRAIDO AUTOMATICAMENTE. PARA EQUACOES, FIGURAS E DIAGRAMAS, CONSULTE O PDF ORIGINAL.
+
+
+=================================== PÁGINA 1 ===================================
+UNIVERSIDADE CATÓLICA DE SANTOS
+DISCIPLINA DE COMPUTAÇÃO GRÁFICA
+FELIPE DO PRADO MARQUES SOUZA – 5898828
+KENUI MATHEUS NASCIMENTO RUAS – 6251479
+VINICIUS MEDEIROS PERES – 5834983
+VITOR AMORIM TARTARI – 3492050
+AMBIENT OCCLUSION EM ESPAÇO DE TELA
+(SSAO)
+Entrega 1 – Revisão Bibliográfica
+Entrega 2 – Arquitetura do Pipeline Vulkan
+Santos – SP
+2026
+
+=================================== PÁGINA 2 ===================================
+FELIPE DO PRADO MARQUES SOUZA
+KENUI MATHEUS NASCIMENTO RUAS
+VINICIUS MEDEIROS PERES
+VITOR AMORIM TARTARI
+AMBIENT OCCLUSION EM ESPAÇO DE TELA (SSAO)
+Relatório de revisão bibliográfica e arquitetura do
+pipeline Vulkan apresentado à disciplina de Com-
+putação Gráfica da Universidade Católica de San-
+tos como requisito de avaliação das Entregas 1 e
+2.
+Santos – SP
+2026
+
+=================================== PÁGINA 3 ===================================
+RESUMO
+Este relatório apresenta uma revisão bibliográfica sobre o Screen-Space Ambient Occlu-
+sion (SSAO), técnica de computação gráfica utilizada para aproximar a redução da iluminação
+ambiente em cavidades, cantos e regiões de contato. São descritos seus fundamentos, principais
+equações, vantagens, limitações e custo computacional. Na Entrega 2, especifica-se uma arquite-
+tura Vulkan com quatro render passes, diagrama vetorial, descriptor sets, layouts de buffers,
+imagens e barreiras de memória. A sincronização inclui upload, dependências entre passes,
+reutilização dos recursos e apresentação. A aplicação prática é examinada em capturas próprias
+de gameplay de Overwatch 2 e Fortnite, nas quais se observam alterações de contraste e per-
+cepção de profundidade associadas à oclusão de ambiente. A pesquisa utiliza artigos científicos,
+publicações técnicas e documentações oficiais.
+Palavras-chave: oclusão de ambiente; SSAO; Vulkan; renderização em tempo real; computação
+gráfica.
+
+=================================== PÁGINA 4 ===================================
+SUMÁRIO
+1 Introdução 5
+2 Explicação teórica da técnica 5
+2.1 Definição, objetivo e problema resolvido . . . . . . . . . . . . . . . . . . . . . 5
+2.2 Funcionamento . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+2.3 Vantagens, limitações e adequação . . . . . . . . . . . . . . . . . . . . . . . . 6
+3 Fundamentação matemática 6
+3.1 Oclusão ambiente contínua . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+3.2 Estimativa discreta do SSAO . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+3.3 Reconstrução da posição . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+3.4 Filtro bilateral . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+4 Relação com o Vulkan 8
+4.1 Pipeline e recursos . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+4.2 Fluxo e sincronização . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+4.3 Estratégias de otimização . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+5 Aplicações práticas 9
+5.1 Motores de jogos em tempo real . . . . . . . . . . . . . . . . . . . . . . . . . 9
+5.2 Visualização arquitetônica e simuladores . . . . . . . . . . . . . . . . . . . . . 9
+6 Análise da técnica em jogos 9
+6.1 Overwatch 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+6.2 Fortnite Battle Royale . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11
+7 Discussão 13
+8 Conclusão 13
+9 Entrega 2 – Arquitetura do pipeline Vulkan para SSAO 15
+9.1 Organização da arquitetura . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+9.2 Diagrama completo e legenda . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+9.3 Fluxo de dados e funcionamento dos shaders . . . . . . . . . . . . . . . . . . . 17
+9.4 Render passes, subpasses e attachments . . . . . . . . . . . . . . . . . . . . . 18
+9.5 Imagens, formatos, usos e amostragem . . . . . . . . . . . . . . . . . . . . . . 19
+9.6 Descriptor sets e bindings . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20
+9.7 Layouts e finalidade dos buffers . . . . . . . . . . . . . . . . . . . . . . . . . 21
+9.8 Estágios e escopos de sincronização . . . . . . . . . . . . . . . . . . . . . . . 23
+9.9 Barreiras de memória e transições de layout . . . . . . . . . . . . . . . . . . . 24
+
+=================================== PÁGINA 5 ===================================
+9.10 Ordem dos comandos e sincronização com a apresentação . . . . . . . . . . . 26
+9.11 Justificativa das decisões arquiteturais . . . . . . . . . . . . . . . . . . . . . . 27
+REFERÊNCIAS 28
+
+=================================== PÁGINA 6 ===================================
+5
+1 Introdução
+A oclusão de ambiente (ambient occlusion, AO) aproxima a redução de iluminação difusa
+causada pelo bloqueio geométrico do hemisfério visível em torno de um ponto. Cavidades,
+cantos, junções e regiões de contato recebem menos luz ambiente do que áreas abertas. O
+resultado fornece pistas perceptivas de proximidade, curvatura e profundidade, sem substituir
+sombras diretas nem uma solução completa de iluminação global Bavoil e Sainz (2008); Mittring
+(2007).
+A variante em espaço de tela, chamada Screen-Space Ambient Occlusion(SSAO), estima
+esse bloqueio a partir de informações já rasterizadas, principalmente profundidade e normais. Ela
+tornou viável uma aproximação dinâmica em tempo real e ficou conhecida pela implementação
+apresentada para a CryEngine 2 Mittring (2007). Este relatório discute seus fundamentos,
+equações, custo, integração com Vulkan e aplicações reais. A implementação em código não faz
+parte desta etapa.
+2 Explicação teórica da técnica
+2.1 Definição, objetivo e problema resolvido
+Em iluminação local convencional, uma parcela ambiente constante pode iluminar igual-
+mente pontos expostos e pontos comprimidos entre superfícies. Isso reduz a percepção de
+contato: um objeto pode parecer flutuar e um canto pode parecer plano. O SSAO gera, para
+cada fragmento visível, um fator escalar de acessibilidade. Esse fator modula apenas a compo-
+nente ambiente ou indireta da iluminação, escurecendo regiões cuja vizinhança contém muitos
+potenciais oclusores.
+O método resolve aproximadamente o problema da visibilidade da iluminação ambiente,
+mas apenas para a geometria representada na imagem atual. Não calcula transporte de luz
+completo, rebatimentos de cor, reflexos ou sombras projetadas por uma fonte pontual.
+2.2 Funcionamento
+O fluxo típico contém cinco fases:
+1. a cena é rasterizada e produz uma textura de profundidade e, em renderização adiada,
+normais no G-buffer;
+2. a posição de cada pixel é reconstruída no espaço de visão usando profundidade e matriz de
+projeção inversa;
+3. um conjunto de amostras é distribuído em um hemisfério orientado pela normal da superfí-
+cie;
+
+=================================== PÁGINA 7 ===================================
+6
+4. as amostras são projetadas novamente para coordenadas de tela e comparadas com a
+profundidade armazenada;
+5. a oclusão ruidosa é filtrada bilateralmente e combinada com a iluminação ambiente.
+Um vetor de ruído rotaciona o núcleo de amostragem por pixel. Assim, padrões de bandas
+se transformam em ruído espacial menos estruturado, que pode ser reduzido por filtro. Um bias
+evita auto-oclusão, enquanto uma função de alcance impede que superfícies muito distantes
+contribuam indevidamente.
+2.3 Vantagens, limitações e adequação
+As principais vantagens são independência da complexidade total da cena, suporte natural
+a objetos dinâmicos, ausência de pré-processamento geométrico e integração simples como
+pós-processamento. Para resolução W × H e N amostras por pixel, o custo dominante é
+aproximadamente O(W HN); por isso o custo cresce com a resolução e o tamanho do núcleo,
+não diretamente com o número de triângulos.
+As limitações decorrem do espaço de tela: objetos fora da câmera não ocluem; superfícies
+escondidas pelo primeiro nível de profundidade são desconhecidas; bordas da tela carecem de
+amostras; raios grandes podem causar halos; poucos pontos geram ruído; descontinuidades de
+profundidade produzem vazamento. A aproximação também pode escurecer demais superfícies
+finas e não é fisicamente exata Bavoil e Sainz (2008); McGuire, Mara e Luebke (2012).
+O SSAO é mais adequado para jogos e visualizações interativas com cenas dinâmicas,
+sobretudo em interiores, cantos arquitetônicos, vegetação densa e contatos entre objetos. É menos
+adequado quando se exige iluminação global fisicamente correta, quando a geometria relevante
+permanece fora da tela ou em realidade virtual muito sensível a instabilidades temporais.
+3 Fundamentação matemática
+3.1 Oclusão ambiente contínua
+Uma forma geral para a acessibilidade ambiente no ponto P, com normal n, é:
+A(P) = 1
+π
+Z
+Ω(n)
+V (P, ω) (n · ω) dω. (1)
+Ω(n) é o hemisfério orientado pela normal; ω é uma direção; V vale 1 quando a direção está
+livre e 0 quando está bloqueada; n · ω pondera direções pela lei do cosseno. A equação define a
+fração de iluminação difusa acessível. No processo de renderização, o fator é aplicado antes ou
+durante a composição da iluminação ambiente.
+
+=================================== PÁGINA 8 ===================================
+7
+Bavoil e Sainz (2008) descrevem a oclusão com função de visibilidade de oclusores e
+atenuação W:
+AO(P) = 1 − 1
+2π
+Z
+Ω
+V (ω)W(ω) dω. (2)
+Aqui, AO = 1 representa região aberta e valores menores indicam maior bloqueio; W reduz a
+influência conforme a distância, restringindo o raio de ação.
+3.2 Estimativa discreta do SSAO
+Na GPU, a integral é aproximada por N amostras:
+bO(P) = 1
+N
+NX
+i=1
+s(zi − z(π(P + ki)) − β) f(∥ki∥, R) . (3)
+P é a posição do fragmento no espaço de visão;ki é a amostra do hemisfério; π projeta a posição
+para coordenadas de tela; zi é a profundidade esperada da amostra; z(·) é a profundidade lida; β
+é o bias; s é uma função degrau ou transição suave; f é a atenuação de alcance; e R é o raio. A
+comparação decide se a geometria visível está à frente da amostra e, portanto, pode ocluí-la.
+Uma atenuação comum é:
+f(d, R) = smoothstep
+
+0, 1, R
+|∆z| + ε
+
+, (4)
+em que d ou ∆z representa a separação, R é o raio e ε evita divisão por zero. Essa função é
+usada durante a acumulação para reduzir halos entre superfícies desconectadas.
+O fator final que modula a iluminação pode ser escrito como:
+ASSAO (P) = 1 − clamp
+
+bO(P), 0, 1
+
+, L final = Ldireta + ASSAO Lambiente. (5)
+Ldireta não deve ser multiplicada indiscriminadamente pelo SSAO; o fator atua sobre Lambiente
+ou sobre a iluminação indireta aproximada.
+3.3 Reconstrução da posição
+Se qndc = (2u−1, 2v−1, 2d−1, 1) contém coordenadas de textura(u, v) e profundidade
+d convertidas para NDC, então:
+qview = P−1qndc, pview = qview.xyz
+qview.w
+. (6)
+P−1 é a matriz de projeção inversa. Essa operação acontece no shader de SSAO e evita armazenar
+uma textura adicional de posição. Em Vulkan, deve-se respeitar a convenção de profundidade
+[0, 1] e a convenção adotada para o eixo vertical.
+
+=================================== PÁGINA 9 ===================================
+8
+3.4 Filtro bilateral
+Para reduzir ruído sem apagar bordas geométricas, emprega-se:
+eA(p) = 1
+Kp
+X
+q∈N(p)
+A(q)Gσs(∥p − q∥)Gσz (|zp − zq|)Gσn(1 − np · nq), (7)
+onde N(p) é a vizinhança,Gσ são pesos gaussianos,z é profundidade, n é normal eKp normaliza
+a soma. O filtro rejeita amostras através de descontinuidades e é executado após o cálculo bruto
+da oclusão.
+4 Relação com o Vulkan
+4.1 Pipeline e recursos
+Uma implementação típica usa renderização adiada. No primeiro passe, vertex e fragment
+shaders escrevem profundidade, normais e material no G-buffer. No segundo, um triângulo
+de tela cheia aciona um fragment shader ou um compute shader que lê profundidade, normais,
+núcleo e ruído, reconstruindo posições e calculando SSAO. Um terceiro passe aplica desfoque
+bilateral. No passe de iluminação, a textura filtrada modula a luz ambiente.
+Os recursos necessários são: uma imagem de profundidade (por exemplo, D32_SFLO
+AT); uma imagem de normais (como R16G16B16A16_SFLOAT ou formato compactado);
+uma imagem SSAO de canal único ( R8_UNORM ou R16_SFLOAT ); uma imagem de ruído
+pequena e repetível; um uniform buffercom projeção, inversa, raio, bias e tamanho da tela; e um
+storage/uniform buffercom as amostras.
+Em render passes tradicionais, attachments podem ser relacionados por subpasses,
+mas um input attachment só permite leitura na mesma coordenada de fragmento; como
+SSAO consulta pixels vizinhos, profundidade e normais normalmente devem ser imagens
+amostradas por sampler2D. A especificação do Vulkan define a ligação entre subpass inputs e
+InputAttachmentIndex Khronos Group (2026f). Dynamic rendering também pode ser
+usado, desde que transições e dependências sejam explicitadas.
+4.2 Fluxo e sincronização
+Após o G-buffer, uma barreira transita as imagens de escrita de attachment para leitura no
+shader, com dependência dos estágios COLOR_ATTACHMENT_OUTPUT e EARLY_FRAGME
+NT_TESTS/LATE_FRAGMENT_TESTS para FRAGMENT_SHADER ou COMPUTE_SHADER.
+A imagem SSAO passa de destino de cor ou armazenamento para leitura no filtro; depois, a
+imagem filtrada passa para leitura no estágio de iluminação. Entre os layouts usuais estão
+VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL , SHADER_READ_ON
+LY_OPTIMAL, COLOR_ATTACHMENT_OPTIMAL e GENERAL para storage image.
+
+=================================== PÁGINA 10 ===================================
+9
+Descriptor sets conectam as imagens e buffers aos shaders. Push constants são adequadas
+para poucos parâmetros alterados por quadro. GLSL é compilado para SPIR-V . Command
+buffers registram passes e despachos; semáforos sincronizam quadros e barreiras/pipeline barriers
+garantem visibilidade de memória dentro do fluxo.
+4.3 Estratégias de otimização
+Podem-se calcular SSAO em meia resolução, usar 8–32 amostras, separar o filtro em
+horizontal/vertical, reconstruir normais a partir da profundidade, usar profundidade hierárquica
+e explorar compute shaders com memória compartilhada. Ruído azul e acumulação temporal
+reduzem o número de amostras por quadro. McGuire, Mara e Luebke (2012) mostram que pré-
+filtragem de profundidade, reconstrução de posição/normal e otimizações orientadas à arquitetura
+podem obter ganho expressivo e tempo previsível.
+5 Aplicações práticas
+5.1 Motores de jogos em tempo real
+Motores como CryEngine adotaram SSAO para reforçar contatos, reentrâncias e micro-
+geometria em cenas dinâmicas. A técnica acrescenta profundidade visual sem a necessidade de
+raios por toda a cena, mantendo custo compatível com tempo real Mittring (2007). Em pipelines
+modernos, variantes como HBAO, GTAO e CACAO melhoram estabilidade ou desempenho,
+mas preservam a ideia de estimar oclusão com dados em tela.
+5.2 Visualização arquitetônica e simuladores
+Em visualização 3D interativa, SSAO torna legíveis encontros entre parede e piso,
+encaixes, mobiliário e detalhes de modelos CAD. O benefício é especialmente visível quando a
+iluminação direta é uniforme. Em simuladores, melhora a percepção de distância e contato entre
+objetos sem exigir baking; contudo, os parâmetros devem ser conservadores para evitar falsos
+sombreamentos que prejudiquem a leitura técnica.
+6 Análise da técnica em jogos
+6.1 Overwatch 2
+Plataforma analisada: PC. Situação de gameplay: área interna de treinamento, com
+mesas, cadeiras, monitores e paredes metálicas. Elementos observados: encontros entre paredes
+e piso, pés das mesas, rodas da cadeira e parte inferior das bancadas. Nesses pontos, a oclusão
+
+=================================== PÁGINA 11 ===================================
+10
+produz escurecimento suave de contato e de cavidades, reforçando a profundidade sem criar uma
+sombra direcional de contorno definido.
+Overwatch 2 é um jogo gratuito de tiro em primeira pessoa desenvolvido pela Blizzard
+Entertainment. A versão para PC apresenta a configuração Ambient Occlusion; o guia técnico
+de gráficos e desempenho da NVIDIA para Overwatch documenta essa opção e compara seu
+impacto visual e computacional Nvidia (2016). O registro do menu comprova a ativação do
+recurso durante a captura. A interpretação do efeito como oclusão em espaço de tela é relacionada
+aos métodos de Bavoil e Sainz (2008) e de McGuire, Mara e Luebke (2012).
+Para documentar a configuração utilizada, o grupo registrou a tela de qualidade gráfica
+com Oclusão de Ambientedefinida como “Alto”. A cena foi capturada em uma área interna
+de treinamento, com mesas, cadeiras, monitores e encontros entre paredes e piso, elementos
+adequados para observar o escurecimento de proximidade.
+Figura 1 – Configuração de Oclusão de Ambiente em “Alto” no Overwatch 2. Fonte: captura própria do
+grupo, 2026.
+
+=================================== PÁGINA 12 ===================================
+11
+Figura 2 – Oclusão de ambiente observada no Overwatch 2. As marcações destacam o reforço de
+profundidade nos contatos das mesas e da cadeira com o piso e na região inferior do mobiliário. Fonte:
+captura própria do grupo, 2026.
+Na Figura 2, o efeito aparece como uma redução suave da iluminação nas proximidades
+entre as superfícies. Ele é mais perceptível nas rodas e na base da cadeira, nos pés das mesas
+e abaixo das bancadas. Essas regiões ganham maior separação visual em relação ao piso e à
+parede, evitando a aparência de objetos flutuando. A captura com a opção ativada, associada ao
+registro do menu na Figura 1, satisfaz a exigência de evidência própria durante o gameplay.
+6.2 Fortnite Battle Royale
+Plataforma analisada: PC. Configuração utilizada: caminho rasterizado, sem Lumen e
+sem ray tracing. Situação de gameplay: área externa com árvores, painéis informativos, calçada
+e mobiliário urbano. Elementos observados: contato entre o painel e o piso, base da árvore
+junto ao canteiro e suporte do mapa. A técnica produz escurecimento suave e não direcional
+nessas proximidades, reforçando profundidade e contato.
+Fortnite é desenvolvido pela Epic Games com Unreal Engine. A apresentação técnica
+oficial sobre a otimização de Fortnite: Battle Royaledocumenta seu pipeline em Unreal Engine
+Epic Games (2018); por sua vez, a documentação oficial do motor descreve a oclusão de ambiente
+como recurso configurável de pós-processamento Epic Games (2026). A edição atual pode
+combinar técnicas distintas de iluminação, especialmente Lumen e ray tracing. Portanto, a
+evidência de gameplay deste trabalho deve registrar o modo de renderização e manter esses
+recursos desligados para isolar a aproximação em espaço de tela. Essa delimitação evita atribuir
+ao SSAO um efeito calculado por outra técnica.
+Para isolar a variável analisada, o grupo manteve resolução 3D em 100%, reflexos em
+
+=================================== PÁGINA 13 ===================================
+12
+espaço de tela, sombras épicas, distância de visão épica, texturas épicas, efeitos épicos e pós-
+processamento baixo. Alterou-se somente a opção Iluminação Global, comparando “Desligado”
+com “Oclusão de Ambiente”. O próprio menu informa que essa última opção oferece iluminação
+ambiente de menor qualidade e cantos escurecidos, enquanto Lumen permaneceu indisponível
+no modo utilizado.
+(a) Iluminação Global desligada.
+ (b) Oclusão de Ambiente ativada.
+Figura 3 – Configurações registradas pelo grupo no Fortnite para a comparação controlada. Fonte: captura
+própria, 2026.
+Figura 4 – Fortnite com a oclusão de ambiente desligada. As marcações indicam regiões de contato que
+apresentam iluminação mais uniforme e menor reforço de profundidade. Fonte: captura própria do grupo,
+2026.
+
+=================================== PÁGINA 14 ===================================
+13
+Figura 5 – Fortnite com Oclusão de Ambiente ativada. Observa-se reforço local de contraste nas bases do
+painel informativo, da árvore junto ao canteiro e do suporte do mapa. Fonte: captura própria do grupo,
+2026.
+As Figuras 4 e 5 foram obtidas praticamente no mesmo enquadramento. A comparação
+não deve ser interpretada como sombra solar: as sombras direcionais continuam presentes nos
+dois casos. O elemento atribuído à oclusão de ambiente é o escurecimento suave e localizado nas
+proximidades onde duas superfícies se encontram. Como o contraste é perceptível nas capturas,
+não foi necessário produzir vídeo adicional para este jogo.
+7 Discussão
+O SSAO é um compromisso entre plausibilidade e desempenho. O artigo HBAO formal-
+iza o horizonte de oclusão e reduz problemas de sobreoclusão de aproximações anteriores Bavoil
+e Sainz (2008). O SAO, por sua vez, demonstra que estrutura de memória e reconstrução eficiente
+são tão importantes quanto a fórmula de iluminação McGuire, Mara e Luebke (2012). No Vulkan,
+isso se traduz em escolhas explícitas de formato, layouts, sincronização e organização dos passes.
+A principal precaução visual é não confundir SSAO com sombra direta: o efeito aparece como
+escurecimento local de baixa frequência em contatos e reentrâncias.
+8 Conclusão
+SSAO estima a acessibilidade da luz ambiente usando informações visíveis na tela.
+Sua complexidade previsível, compatibilidade com cenas dinâmicas e integração como pós-
+processamento explicam sua ampla adoção. Em contrapartida, o método desconhece geometria
+
+=================================== PÁGINA 15 ===================================
+14
+fora da tela ou atrás da primeira camada, podendo gerar halos, ruído e instabilidade. Profundidade,
+normais, amostragem hemisférica, projeção e filtro bilateral formam o núcleo matemático e
+computacional. Vulkan fornece todos os recursos necessários, mas exige que o desenvolvedor
+estabeleça imagens, descriptors, layouts e sincronização de modo explícito.
+As análises de Overwatch 2 e Fortnite mostram o efeito em dois jogos gratuitos e
+amplamente conhecidos. As capturas próprias, as marcações e o registro das opções gráficas
+permitem relacionar o escurecimento observado em contatos, cantos e cavidades à oclusão de
+ambiente. No Fortnite, a comparação foi feita mantendo a câmera e os demais parâmetros visuais,
+com alteração apenas da opção de oclusão de ambiente, o que torna mais clara a contribuição
+desse efeito para a leitura de profundidade da cena.
+
+=================================== PÁGINA 16 ===================================
+15
+9 Entrega 2 – Arquitetura do pipeline Vulkan para SSAO
+9.1 Organização da arquitetura
+Esta etapa especifica uma arquitetura concreta para executar Screen-Space Ambient
+Occlusion (SSAO), técnica que estima o bloqueio da iluminação ambiente a partir da pro-
+fundidade e das normais das superfícies visíveis na tela. A arquitetura proposta utiliza qua-
+tro passes gráficos: G-buffer, SSAO, filtro bilateral e composição. Cada etapa possui um
+VkRenderPass , um único subpass de índice 0 e um pipeline gráfico próprio. São usadas
+chamadas vkCmdBeginRenderPass, desenho e vkCmdEndRenderPass. A implemen-
+tação executável e a avaliação de desempenho ficam para uma etapa posterior.
+Adota-se Vulkan 1.3 com a funcionalidade synchronization2 habilitada, usando
+vkCmdPipelineBarrier2 fora dos render passes. Uma única família de filas suporta
+gráficos e apresentação; não há transferência de propriedade entre famílias. O projeto considera
+geometria opaca, uma luz direcional, material com cor uniforme por objeto, resolução W × H,
+uma amostra por pixel (sem MSAA), profundidade convencional de 0 a 1, teste LESS e limpeza
+da profundidade em 1. Não há tesselação, geometry shader, compute shader, transparência ou
+acumulação temporal nesta variante.
+O SSAO usa 32 amostras hemisféricas, raio em unidades do espaço de visão e ruído de
+rotação 4 × 4. O filtro bilateral 5 × 5 opera em resolução completa. Os valores de raio, bias,
+intensidade e sigmas devem ser ajustados à escala da cena. As barreiras são identificadas por
+B0–B6, BU0–BU2 e BR no diagrama e nos quadros de sincronização.
+A organização dos recursos e as regras de sincronização seguem a documentação do
+Vulkan Khronos Group (2026e,g,d). A quantidade de passes, os formatos propostos, as estruturas
+e os parâmetros abaixo são decisões arquiteturais do grupo, relacionadas ao funcionamento do
+SSAO.
+9.2 Diagrama completo e legenda
+A Figura 6 relaciona origem dos dados, shaders, recursos, bindings, attachments e
+sequência de execução. Os quadros seguintes detalham os recursos e as barreiras identificados
+no desenho. O original vetorial está em diagramas/pipeline_ssao.tex, produzido em
+TikZ e compilado no mesmo projeto LaTeX.
+
+=================================== PÁGINA 17 ===================================
+Figura 6 – Arquitetura do pipeline Vulkan para SSAO
+CPU / preparação
+VB: 24 B/vértice; IB: uint32
+Frame: 272 B; Kernel: 512 B
+Material: 16 B; PC: 128 B
+Ruído: 4 ×4; upload BU0–BU2
+Antes de gravar o quadro
+Fence do slot; atualizar UBO
+B0: primeira utilização
+BR: reutilização após leitura
+Fila gráfica/apresentação
+RP0 / subpass 0 – G-buffer
+geometry.vert + geometry.frag
+Vertex input → VS → rasterização
+FS + testes de profundidade → cor
+S0:b0 Frame; S1:b0 Material; PC
+vkCmdDrawIndexed
+Saídas de RP0 / attachments
+a0: gNormal (RGBA16F), loc. 0
+a1: gAlbedo (RGBA8), loc. 1
+a2: gDepth (D32F)
+B1: cor CA → SR
+B2: profundidade DA → DR
+RP1 / subpass 0 – SSAO
+fullscreen.vert + ssao.frag
+S0:b0 Frame; S0:b1 Kernel
+S1:b0 Depth; b1 Normal; b2 Noise
+VS → rasterização → FS → cor
+32 amostras; vkCmdDraw(3)
+Saída de RP1 / attachment a0
+aoRaw (R16F), loc. 0
+Acessibilidade: 1 = aberto; 0 =
+ocluído
+B3: CA → SR
+Destino: filtro bilateral
+RP2 / subpass 0 – filtro bilateral
+fullscreen.vert + bilateral.frag
+S0:b0 Frame; S1:b0 aoRaw
+S1:b1 Depth; b2 Normal
+VS → rasterização → FS → cor
+Janela 5×5; vkCmdDraw(3)
+Saída de RP2 / attachment a0
+aoFiltered (R16F), loc. 0
+B4: CA → SR
+Destino: iluminação ambiente
+Depth/Normal guiam preservação
+de bordas
+RP3 / subpass 0 – composição
+fullscreen.vert + lighting.frag
+S0:b0 Frame; S1:b0 Albedo
+S1:b1 Normal; b2 aoFiltered; b3 Depth
+VS → rasterização → FS → cor
+C = Cdireta + Aγ
+f Cambiente
+Swapchain / aquisição
+vkAcquireNextImageKHR
+Semáforo imageAvailable[slot]
+Espera na submissão: CAO
+B5: UNDEFINED/PRESENT →
+CA
+Saída de RP3 / attachment a0
+swapImage[j] (formato sRGB)
+B6: CA → PRESENT
+Sinal renderFinished[j] → present
+Fence sinaliza fim do uso do slot
+Recursos compartilhados
+Frame: RP0–RP3; Kernel/Ruído:
+RP1
+gDepth + gNormal: RP1, RP2 e
+RP3
+gAlbedo: RP3
+Todas as entradas de imagem:
+sampler2D
+Sem input attachments ou stor-
+age images
+G-buffer; B1 / B2
+aoRaw; B3
+aoFiltered; B4
+Fonte: elaboração do grupo (2026).
+Legenda: azul = passes e sequência de execução; verde = recursos e fornecimento de dados; laranja e setas tracejadas = sincronização. S = descriptor set; b = binding; a
+= attachment; loc. = saída do fragment shader; PC = push constants.
+CA = layout de attachment de cor; DA = de profundidade; SR = leitura em shader; DR = leitura de profundidade; CAO = estágio de saída de cor. B = barreira detalhada
+nos quadros de sincronização.
+16
+
+=================================== PÁGINA 18 ===================================
+17
+9.3 Fluxo de dados e funcionamento dos shaders
+9.3.1 Preparação da cena e dos dados
+A CPU carrega posições, normais e índices da malha. Comandos de transferência copiam
+os dados de um staging buffer para VB, IB e a imagem de ruído em memória de dispositivo;
+BU0–BU2 disponibilizam essas escritas à renderização. FrameUBO guarda câmera, resolução,
+parâmetros de SSAO/filtro e iluminação. KernelUBO contém as 32 amostras geradas na CPU e
+reutilizadas. Para cada objeto, a CPU seleciona MaterialUBO e envia matrizes por push constants.
+O ruído contém vetores (x, y,0) de rotação, com componentes assinadas.
+9.3.2 RP0: visibilidade, normais e material
+geometry.vert lê VB e transforma a posição por P V M; transforma a normal com a
+inversa transposta de V M, enviada pela CPU. A normal e a posição reconstruída posteriormente
+pertencem ao mesmo espaço de visão. A rasterização gera fragmentos, e os testes de profundidade
+selecionam as superfícies visíveis.geometry.frag renormaliza a normal interpolada, escreve-
+a em gNormal (location 0) e escreve a cor linear do MaterialUBO em gAlbedo (location 1).
+gDepth é escrito pelos testes de profundidade; não há escrita de gl_FragDepth.
+9.3.3 RP1: estimativa da acessibilidade ambiente
+fullscreen.vert gera um triângulo que cobre a tela usando gl_VertexIndex,
+sem VB ou IB. ssao.frag lê gDepth, gNormal, noise e KernelUBO. Com viewport de altura
+positiva e projeção já adaptada ao Vulkan, considera os índices inteiros de pixel(x, y), calcula
+u = (x + 0,5)/W, v = (y + 0,5)/H e reconstrói a posição:
+h = P−1(2u − 1, 2v − 1, d, 1)T , p = hxyz/hw. (8)
+Nas equações, P é a matriz de projeção, V é a matriz de visão e M é a transformação do objeto.
+O valor d já está no intervalo de profundidade do Vulkan; não é convertido para2d − 1. Uma
+base TBN é formada pela normal e pelo vetor de ruído, com eixo alternativo quando ambos
+forem quase paralelos. A amostra de visão é qi = p + R T BN ki. Ela é projetada por P, dividida
+por w e convertida em UV . Amostras fora da tela, fora do intervalo de profundidade ou atrás da
+câmera são rejeitadas.
+Para uma câmera olhando para −Z, um oclusor amostrado satisfaz zcena ≥ qi,z + β.
+A comparação usa profundidade reconstruída em espaço de visão , para manter todas as
+distâncias na mesma unidade da cena. Com atenuação wi pelo alcance e Nv amostras válidas:
+A = clamp
+ 
+1 − 1
+max(Nv, 1)
+X
+i valido
+wi [zcena ≥ qi,z + β], 0, 1
+!
+. (9)
+
+=================================== PÁGINA 19 ===================================
+18
+Sem amostras válidas, retorna-se 1. Pixels de fundo ( d = 1) também recebem 1. O resultado
+aoRaw representa acessibilidade: valores menores significam maior oclusão. A barreira B3
+garante sua disponibilidade para o filtro.
+9.3.4 RP2: filtro bilateral
+bilateral.frag combina uma vizinhança 5 × 5 de aoRaw. Para coordenadas de
+pixel x e y, os pesos combinam distância em pixels, diferença de profundidade no espaço de
+visão e semelhança entre normais:
+Af (x) =
+P
+y∈N(x) A(y) wxy
+P
+y∈N(x) wxy
+, w xy = e
+−∥x−y∥2
+2σ2s e
+−(zx−zy)2
+2σ2z max(nx· ny, 0)k. (10)
+A normal é unitária e os parâmetros satisfazem σs > 0, σz > 0 e k >0. Assim, a amostra central
+mantém denominador positivo; pixels inválidos ou de fundo não contaminam superfícies. gDepth
+e gNormal são compartilhados com RP1, apenas para leitura. O filtro reduz ruído preservando
+descontinuidades. Sua saída é aoFiltered; não se lê e escreve a mesma imagem no passe.
+9.3.5 RP3: iluminação e apresentação
+lighting.frag lê gAlbedo, gNormal, aoFiltered e gDepth. Para superfícies, calcula
+iluminação difusa direcional e modula somente a parcela ambiente:
+Clinear = albedo ⊙
+
+Ld max(n · l, 0) + LaAγ
+f
+
+. (11)
+A direção l aponta para a luz em espaço de visão; γ >0 controla a intensidade do efeito. O
+fundo é identificado por gDepth e recebe uma cor definida. Este modelo didático não inclui
+sombras diretas ou iluminação especular. O fragment shader produz cor linear; com attachment
+sRGB, a conversão de saída ocorre na escrita do attachment, sem aplicar uma segunda correção
+gama. B6 deixa a imagem pronta para apresentação.
+9.4 Render passes, subpasses e attachments
+Todos os passes usam VK_PIPELINE_BIND_POINT_GRAPHICS , um subpass
+0 e VK_SAMPLE_COUNT_1_BIT . RP0 desenha uma vez por objeto; RP1–RP3 usam
+vkCmdDraw(3,1,0,0). Os pipelines de tela cheia desabilitam teste/escrita de profundidade,
+blending e culling. Viewport e scissor cobrem a extensão W × H.
+
+=================================== PÁGINA 20 ===================================
+19
+Quadro 1 – Render passes, entradas e attachments
+Passe Attachments no
+subpass 0
+Leitura de entrada Resultado e operações
+RP0 a0 gNormal; a1
+gAlbedo; a2 gDepth
+VB/IB, Frame, Material,
+PC
+CLEAR/STORE nos três. Normal
+limpa em 0; albedo em 0;
+profundidade em 1. Saídas de cor:
+loc. 0/1.
+RP1 a0 aoRaw Depth, Normal, Noise,
+Frame, Kernel
+CLEAR em 1 e STORE.
+Acessibilidade bruta em loc. 0.
+RP2 a0 aoFiltered aoRaw, Depth, Normal,
+Frame
+CLEAR em 1 e STORE.
+Acessibilidade filtrada em loc. 0.
+RP3 a0 swapImage[j] Albedo, Normal,
+aoFiltered, Depth, Frame
+CLEAR e STORE. Cor final em
+loc. 0, destinada à apresentação.
+Fonte: elaboração do grupo (2026).
+Os pColorAttachments de RP0 apontam para índices 0 e 1; pDepthStencilA
+ttachment aponta para 2. Nos demais passes, pColorAttachments[0] aponta para a0 e
+não há attachment de profundidade. Não há resolve, preserve attachments ou input attachments.
+Os campos de stencil usam DONT_CARE, pois o formato escolhido não possui stencil.
+Política única de layouts: nos render passes, initialLayout, layout da referência
+de subpass e finalLayout são todos CA para cor e DA para profundidade. As transições são
+feitas explicitamente fora dos passes. Assim, B1–B6 não duplicam transições automáticas. Como
+há só um subpass e nenhuma transição interna, não são necessárias dependências personalizadas
+entre subpasses. As dependências produtor–consumidor são as barreiras externas descritas
+adiante, com dependencyFlags=0; não se usa BY_REGION, pois a leitura do SSAO e do
+filtro alcança pixels vizinhos.
+9.5 Imagens, formatos, usos e amostragem
+As imagens intermediárias têm tiling OPTIMAL, um mip, uma camada, uma amostra
+e uma view 2D. Não são imagens transitórias, pois serão amostradas após o término do passe.
+Cada slot de quadro possui seu próprio conjunto de imagens intermediárias.
+
+=================================== PÁGINA 21 ===================================
+20
+Quadro 2 – Imagens utilizadas no pipeline
+Recurso Formato proposto Usage / extensão Produtor →
+consumidores
+gDepth VK_FORMAT_D32_SFLOAT DEPTH_STENCIL_
+ATTACHMENT |
+SAMPLED; W × H
+RP0 → RP1, RP2, RP3
+gNormal VK_FORMAT_R16G16B16A
+16_SFLOAT
+COLOR_ATTACHME
+NT | SAMPLED;
+W × H
+RP0 → RP1, RP2, RP3
+gAlbedo VK_FORMAT_R8G8B8A8_U
+NORM
+COLOR_ATTACHME
+NT | SAMPLED;
+W × H
+RP0 → RP3
+aoRaw VK_FORMAT_R16_SFLOAT COLOR_ATTACHME
+NT | SAMPLED;
+W × H
+RP1 → RP2
+aoFiltered VK_FORMAT_R16_SFLOAT COLOR_ATTACHME
+NT | SAMPLED;
+W × H
+RP2 → RP3
+noise VK_FORMAT_R32G32B32A
+32_SFLOAT
+TRANSFER_DST |
+SAMPLED; 4 × 4
+Upload → RP1
+swapImage[j] sRGB suportado pela
+superfície, p.ex. VK_FORMA
+T_B8G8R8A8_SRGB
+COLOR_ATTACHME
+NT; W × H
+RP3 → apresentação
+Fonte: elaboração do grupo (2026).
+Os usos acima omitem o prefixo VK_IMAGE_USAGE_ e o sufixo _BIT. Verificam-se
+as propriedades de formato para attachment e sampled image antes da criação. O suporte não é
+presumido apenas pelo nome do formato; se necessário, escolhe-se outro formato compatível
+e atualizam-se view, attachment e pipeline. A extensão acompanha a swapchain e é recriada
+quando a janela muda de tamanho.
+O sampler de gDepth tem comparação desabilitada. Usam-se NEAREST e CLAMP_
+TO_EDGE nas imagens de tela, com validação explícita das coordenadas; isso evita depender
+de filtragem linear de profundidade. O filtro bilateral lê os texels individualmente. Noise usa
+NEAREST e REPEAT; coordenadas escaladas por (W/4, H/4) repetem o padrão. A view
+de gDepth usa apenas DEPTH; todas as demais usam COLOR. O canal alpha de gNormal é
+reservado e escrito em 1; RGB contém a normal assinada.
+9.6 Descriptor sets e bindings
+Cada pipeline layout contém set 0 (dados globais) e set 1 (recursos específicos). O
+layout de set 0 é idêntico nos quatro pipelines: b0 FrameUBO, UBO visível em VS|FS; b1
+KernelUBO, UBO visível em FS. O binding b1 só é lido pelo SSAO. Na configuração dos
+descriptor set layouts, VS e FS correspondem a VK_SHADER_STAGE_VERTEX_BIT e
+VK_SHADER_STAGE_FRAGMENT_BIT. Todos os descritores têm descriptorCount=1;
+
+=================================== PÁGINA 22 ===================================
+21
+o array de 32 amostras está dentro do buffer, não é um array de descritores. A organização segue
+o vínculo entre set/binding no shader e o pipeline layout Khronos Group (2026d).
+Quadro 3 – Descriptor sets e bindings por passe
+Passe Set:b Recurso Tipo de descriptor Visibilidade / layout
+Todos 0:0 FrameUBO UBO VS | FS; 272 bytes
+RP1 0:1 KernelUBO UBO FS; 512 bytes
+RP0 1:0 MaterialUBO UBO FS; 16 bytes
+RP1 1:0 gDepth CIS FS; DR
+RP1 1:1 gNormal CIS FS; SR
+RP1 1:2 noise CIS FS; SR
+RP2 1:0 aoRaw CIS FS; SR
+RP2 1:1 gDepth CIS FS; DR
+RP2 1:2 gNormal CIS FS; SR
+RP3 1:0 gAlbedo CIS FS; SR
+RP3 1:1 gNormal CIS FS; SR
+RP3 1:2 aoFiltered CIS FS; SR
+RP3 1:3 gDepth CIS FS; DR
+Fonte: elaboração do grupo (2026).
+No Quadro 3, UBO representa VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER e CIS
+representa VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER . O imageLayout
+gravado no descriptor deve corresponder ao layout real no acesso. Set 1 de um passe não deve
+ser confundido com set 1 de outro: são layouts diferentes. A cada passe são vinculados pipeline
+e conjuntos adequados via vkCmdBindDescriptorSets . O set de material muda por
+objeto. Os conjuntos que apontam para imagens/FrameUBO são alocados por slot de quadro;
+não se atualizam descritores em uso pela GPU. Kernel, materiais imutáveis e noise podem ser
+compartilhados entre slots.
+VB e IB são vinculados por vkCmdBindVertexBuffers e vkCmdBindIndex
+Buffer, não por descriptor sets. Push constants são enviados por vkCmdPushConstants,
+também fora do sistema de descritores. Não há SSBO, texel buffer, storage image ou input
+attachment nesta solução: o núcleo cabe em UBO e todas as saídas são attachments.
+9.7 Layouts e finalidade dos buffers
+Os UBOs usam std140, matrizes mat4 em ordem de colunas (stride de coluna de 16
+bytes) e vetores de 16 bytes, evitando divergência de alinhamento entre CPU e shader Khronos
+Group (2026a). Os offsets são em bytes e os tamanhos não incluem eventual alinhamento entre
+alocações.
+
+=================================== PÁGINA 23 ===================================
+22
+Quadro 4 – Campos e offsets dos uniform buffers e push constants
+Buffer / campo Offset Tipo / tamanho Finalidade
+Frame.view 0 mat4 / 64 Transformação mundo → visão.
+Frame.proj 64 mat4 / 64 Projeção Vulkan com profundidade [0, 1].
+Frame.invProj 128 mat4 / 64 Reconstrução de posições a partir de gDepth.
+Frame.aoParams 192 vec4 / 16 Raio R, bias β, intensidade γ, sigma espacial
+em pixels.
+Frame.viewport 208 vec4 / 16 W, H,1/W,1/H.
+Frame.lightDir 224 vec4 / 16 Direção para a luz em visão; w reservado.
+Frame.lightColor 240 vec4 / 16 RGB da luz; w reservado.
+Frame.ambient 256 vec4 / 16 RGB ambiente; w reservado. Total: 272 bytes.
+Kernel.samples 0 vec4[32] / 512 Vetores no hemisfério z ≥ 0, escalados em
+[0, 1]; w reservado. Stride 16.
+Material.b
+aseColor
+0 vec4 / 16 Cor linear RGBA por objeto; alpha 1.
+PC.model 0 mat4 / 64 Transformação objeto → mundo.
+PC.normalView 64 mat4 / 64 Inversa transposta de V M; usa-se bloco 3×3.
+Total PC: 128 bytes.
+Fonte: elaboração do grupo (2026).
+Para manter o tamanho de FrameUBO, σz e k do filtro são constantes de especialização
+do pipeline RP2 (IDs 0 e 1, floats positivos); seu valor é definido na criação do pipeline e não
+ocupa buffer. O tamanho do kernel, 32, e o raio da janela, 2 texels, são constantes do shader.
+Quadro 5 – Organização dos buffers de geometria e transferência
+Buffer Organização Uso e acesso
+VB Intercalado; stride 24. Posição
+vec3: offset 0, location 0. Normal
+vec3: offset 12, location 1.
+Ambos R32G32B32_SFLOAT.
+VERTEX_BUFFER | TRANSFER_DST.
+Binding de vértice 0, rate VERTEX. Não usa
+std140: segue VkVertexInputAttribu
+teDescription.
+IB uint32 contíguo, 4 bytes/índice;
+tipo
+VK_INDEX_TYPE_UINT32.
+INDEX_BUFFER | TRANSFER_DST.
+Define triângulos de RP0, topology
+TRIANGLE_LIST.
+Staging Sequências de bytes para VB, IB
+e noise. Offset de cópia alinhado
+às restrições da operação. Noise:
+16 texels de 4 floats = 256 bytes.
+TRANSFER_SRC, memória
+HOST_VISIBLE.
+bufferRowLength=0 e
+bufferImageHeight=0 na cópia de
+noise.
+UBOs Frame 272 B por slot; Kernel 512
+B compartilhado; Material 16 B
+por material.
+UNIFORM_BUFFER, memória
+HOST_VISIBLE. Escritos antes da
+submissão e mantidos até o fim do uso.
+Fonte: elaboração do grupo (2026).
+A CPU respeita o alinhamento de cada estrutura (por exemplo, alignas(16) nos
+UBOs). Quando vários blocos ocupam um mesmo VkBuffer, o offset de cada região uniform
+
+=================================== PÁGINA 24 ===================================
+23
+respeita minUniformBufferOffsetAlignment ; o range do descriptor é o tamanho
+lógico do bloco. A alocação de memória respeita ainda VkMemoryRequirements . Push
+constants têm um range de 128 bytes com visibilidade VERTEX em RP0; os pipelines de
+tela cheia não os leem. Não se transfere diretamente uma estrutura de CPU com padding
+desconhecido para o shader.
+9.8 Estágios e escopos de sincronização
+A ordem de gravação dos comandos, isoladamente, não resolve as dependências de
+memória. O produtor precisa concluir o acesso relevante e tornar os dados visíveis ao consumidor.
+B1–B4 tratam os riscos de leitura após escrita (RAW); BR trata a passagem da leitura do quadro
+anterior à próxima escrita (WAR) e a mudança de layout. As escolhas seguem o modelo de
+sincronização da API Khronos Group (2026g,c).
+Os quadros de sincronização usam as abreviações abaixo para as flags de Synchronization
+2:
+Quadro 6 – Abreviações dos estágios e tipos de acesso
+Abreviação Constante Vulkan
+TR VK_PIPELINE_STAGE_2_TRANSFER_BIT
+VI / II VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT /
+VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT
+VS / FS VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT /
+VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT
+CAO VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+EFT | LFT VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT
+NONE VK_PIPELINE_STAGE_2_NONE; acesso NONE = VK_ACCESS_2_NONE
+TW VK_ACCESS_2_TRANSFER_WRITE_BIT
+VR / IR VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT /
+VK_ACCESS_2_INDEX_READ_BIT
+CW VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+DW / DRd VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT /
+VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+SRd VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
+Fonte: elaboração do grupo (2026).
+As abreviações dos layouts são: CA = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT
+_OPTIMAL; DA = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ;
+SR = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; DR = VK_IMAGE_LAYOU
+T_DEPTH_STENCIL_READ_ONLY_OPTIMAL ; TD = VK_IMAGE_LAYOUT_TRANSFER
+_DST_OPTIMAL; U = VK_IMAGE_LAYOUT_UNDEFINED ; P = VK_IMAGE_LAYOUT_PR
+ESENT_SRC_KHR. GENERAL não é necessário porque não há storage images.
+
+=================================== PÁGINA 25 ===================================
+24
+9.9 Barreiras de memória e transições de layout
+9.9.1 Upload e primeira utilização
+Quadro 7 – Barreiras de upload e primeira utilização
+ID Recurso Anterior: estágio
+/ acesso
+Posterior: estágio /
+acesso
+Layout Motivo
+BU0 noise nova NONE / NONE TR / TW U → TD Preparar imagem para
+cópia.
+BU1a VB TR / TW VI / VR – Disponibilizar
+vértices copiados.
+BU1b IB TR / TW II / IR – Disponibilizar índices
+copiados.
+BU2 noise TR / TW FS / SRd TD →
+SR
+Disponibilizar texels
+de ruído ao SSAO.
+B0c gNormal,
+gAlbedo, aoRaw,
+aoFiltered novas
+NONE / NONE CAO / CW U → CA Preparar os quatro
+destinos de cor. Uma
+barreira por imagem.
+B0d gDepth nova NONE / NONE EFT | LFT / DRd |
+DW
+U → DA Preparar limpeza,
+teste e escrita de
+profundidade.
+Fonte: elaboração do grupo (2026).
+BU1a/b usam VkBufferMemoryBarrier2 sobre o intervalo copiado (ou o buffer
+inteiro). BU0, BU2 e B0 usam VkImageMemoryBarrier2 . O staging não pode ser
+sobrescrito ou destruído antes da conclusão da cópia. As escritas do host são concluídas antes da
+submissão; se a memória não for HOST_COHERENT, usa-se vkFlushMappedMemoryRan
+ges, respeitando nonCoherentAtomSize. A submissão fornece a passagem das escritas do
+host previamente disponibilizadas para o dispositivo; dispensando uma barreira HOST adicional
+nesse caso. Isso também se aplica aos UBOs escritos diretamente pela CPU.
+
+=================================== PÁGINA 26 ===================================
+25
+9.9.2 Dependências entre os passes
+Quadro 8 – Barreiras entre os passes e a apresentação
+ID Recurso Anterior: estágio
+/ acesso
+Posterior: estágio
+/ acesso
+Layout Motivo e local
+B1 gNormal e
+gAlbedo
+CAO / CW FS / SRd CA →
+SR
+Após RP0: expor cor
+aos shaders seguintes.
+Uma barreira por
+imagem.
+B2 gDepth EFT | LFT / DW FS / SRd DA →
+DR
+Após RP0: ler
+profundidade
+consistente em
+RP1–RP3.
+B3 aoRaw CAO / CW FS / SRd CA →
+SR
+Entre RP1 e RP2: filtro
+lê SSAO concluído.
+B4 aoFiltered CAO / CW FS / SRd CA →
+SR
+Entre RP2 e RP3:
+iluminação lê AO
+filtrado.
+B5 swapImage[j]
+adquirida
+CAO / NONE CAO / CW U ou P
+→ CA
+Antes de RP3: ordenar
+transição com a espera
+de aquisição e preparar
+escrita.
+B6 swapImage[j] CAO / CW NONE / NONE CA → P Após RP3: transição
+para apresentação, antes
+de sinalizar
+renderFinished[j].
+Fonte: elaboração do grupo (2026).
+B1 e B2 podem ser agrupadas na mesma chamada, mantendo máscaras e aspectos próprios.
+gAlbedo é sincronizado nesse ponto mesmo que só seja consumido em RP3; o escopo de destino
+alcança os acessos posteriores de FS na fila. Não são necessárias barreiras adicionais entre
+leituras de gDepth/gNormal em RP1, RP2 e RP3, pois não há escrita entre elas. Profundidade
+usa EFT e LFT para não depender da escolha de testes antecipados ou tardios da implementação.
+B5 usa U apenas na primeira utilização da imagem da swapchain; depois usa P, rastreando seu
+estado.
+Cada barreira de imagem seleciona baseMipLevel=0, levelCount=1, baseAr
+rayLayer=0, layerCount=1; aspectMask=DEPTH para gDepth e COLOR nas outras.
+Como a mesma família executa todo o fluxo, srcQueueFamilyIndex e dstQueueFami
+lyIndex são VK_QUEUE_FAMILY_IGNORED. Uma dependência de memória não dispensa
+o layout apropriado, e mudar o layout não substitui escolher corretamente estágios e acessos.
+
+=================================== PÁGINA 27 ===================================
+26
+9.9.3 Reutilização dos recursos entre quadros
+Quadro 9 – Barreiras para reutilização das imagens
+ID Recurso Anterior Posterior Layout Motivo
+BRc gNormal, gAlbedo,
+aoRaw, aoFiltered do
+slot
+FS / NONE CAO / CW SR →
+CA
+Ordenar leitura
+anterior antes da
+transição e nova
+escrita.
+BRd gDepth do slot FS / NONE EFT | LFT / DRd |
+DW
+DR →
+DA
+Permitir próxima
+limpeza e escrita
+de profundidade.
+Fonte: elaboração do grupo (2026).
+BR substitui B0 após a primeira utilização. A máscara de origem de acesso pode ser
+NONE porque o último uso é leitura: é preciso ordenar execução, não tornar uma escrita anterior
+disponível. O acesso de destino continua necessário, pois a transição de layout é uma operação
+de escrita. Antes de reutilizar o slot, a CPU também aguarda sua fence; assim, command buffers,
+UBOs e imagens daquele slot não são alterados enquanto estão em uso. Não se reutilizam as
+imagens intermediárias de outro quadro ainda em execução.
+9.10 Ordem dos comandos e sincronização com a apresentação
+São previstos dois slots de quadro em voo, cada um com FrameUBO, imagens inter-
+mediárias, descriptors de imagem, command buffer, fence e semáforo de aquisição. O número de
+imagens da swapchain é independente desses dois slots. O semáforo renderFinished[j]
+pertence à imagem adquirida, não ao slot, evitando reutilizá-lo enquanto a apresentação ainda o
+consome Khronos Group (2026b).
+1. Esperar a fence do slot escolhido; adquirir a imagem j com vkAcquireNextImageKH
+R. Em caso de swapchain desatualizada, recriar os recursos necessários sem submeter o
+quadro incompleto.
+2. Atualizar FrameUBO e finalizar/flush das escritas do host. Reiniciar o command buffer;
+gravar B0 ou BR para imagens intermediárias. O upload está concluído ou antecede esses
+comandos na mesma fila, com BU0–BU2.
+3. Iniciar RP0; vincular pipeline, sets, VB/IB e PC por objeto; desenhar; encerrar RP0. Emitir
+B1/B2.
+4. Executar RP1 com seus sets e o triângulo de tela; encerrar e emitir B3. Executar RP2,
+encerrar e emitir B4.
+
+=================================== PÁGINA 28 ===================================
+27
+5. Emitir B5; executar RP3 no framebuffer associado à imagem j; encerrar e emitir B6.
+Finalizar command buffer.
+6. Resetar a fence somente quando a submissão for realmente ocorrer. Em vkQueueSubmi
+t2, esperar imageAvailable[slot] em CAO e sinalizar renderFinished[j]
+em ALL_COMMANDS, associado à fence do slot. A espera em CAO é conservadora e pode
+reter também saídas de cor dos passes anteriores, mas garante a ordem necessária para a
+swapchain.
+7. Chamar vkQueuePresentKHR esperando renderFinished[j]. A fence permite
+reutilizar recursos do slot após a execução gráfica; não comprova, sozinha, o término da
+apresentação. A aquisição futura de j e sua espera garantem a reutilização do semáforo
+correspondente.
+Semáforos coordenam aquisição, submissão e apresentação; barreiras B0–B6 coordenam
+os acessos às imagens dentro da fila. Não existe estágio denominado PRESENT para substituir a
+espera do semáforo: B6 usa destino NONE, e a dependência com o mecanismo de apresentação
+é estabelecida pelo sinal/espera. Em redimensionamento, recursos e framebuffers dependentes
+da extensão só são destruídos após garantir que não estejam em uso; a swapchain exige também
+aguardar o uso de apresentação de acordo com o mecanismo de recriação adotado.
+9.11 Justificativa das decisões arquiteturais
+Os quatro passes seguem as dependências da técnica: identificar as superfícies visíveis, es-
+timar a oclusão, filtrar o ruído e compor a iluminação. Os fragment shaders de pós-processamento
+reutilizam o triângulo de tela cheia. Como SSAO e filtro consultam pixels vizinhos, suas entradas
+usam sampler2D, em vez de input attachments restritos à coordenada do fragmento. Compute
+shaders são uma alternativa, mas não são necessários para esta organização.
+Reconstruir a posição com gDepth e invProj evita um attachment adicional. As normais
+permanecem em RGBA16F para conservar a orientação da malha com componentes assinadas,
+embora ocupem mais memória que uma representação compactada. R16F armazena o fator de
+oclusão em um único canal e oferece maior precisão durante a filtragem que um formato de 8
+bits. O kernel de 512 bytes é pequeno e somente leitura, justificando o uso de UBO.
+O filtro bilateral considera profundidade e normais para preservar as bordas. Usar
+imagens distintas para aoRaw e aoFiltered evita leitura e escrita simultâneas no mesmo recurso.
+Na composição, aplicar AO somente à parcela ambiente preserva a luz direta. Por fim, recursos
+separados por quadro em voo aumentam o consumo de memória, mas impedem que a CPU
+sobrescreva dados em uso. As barreiras ordenam a passagem de cada imagem entre escrita e
+leitura.
+
+=================================== PÁGINA 29 ===================================
+28
+REFERÊNCIAS
+BA VOIL, Louis; SAINZ, Miguel.Real-time depth buffer based ambient occlusion. Game
+Developers Conference, 2008. Disponível em: https://developer.download.nvidi
+a.com/presentations/2008/GDC/GDC08_Ambient_Occlusion.pdf. Acesso
+em: 10 set. 2026.
+EPIC GAMES. Optimizing UE4 for Fortnite: Battle Royale – Part 1. Game Developers
+Conference, 2018. Disponível em:
+https://www.youtube.com/watch?v=KHWquMYtji0. Acesso em: 10 set. 2026.
+EPIC GAMES. Rendering settings in the Unreal Engine project settings. Epic Developer
+Community. Disponível em: https://dev.epicgames.com/documentation/.
+Acesso em: 10 set. 2026.
+KHRONOS GROUP.Vulkan guide: shader memory layout. [S. l.]: Khronos Group, 2026a.
+Disponível em:
+https://docs.vulkan.org/guide/latest/shader_memory_layout.html.
+Acesso em: 17 set. 2026.
+KHRONOS GROUP.Vulkan guide: swapchain semaphore reuse. [S. l.]: Khronos Group,
+2026b. Disponível em: https:
+//docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html.
+Acesso em: 17 set. 2026.
+KHRONOS GROUP.Vulkan guide: synchronization examples. [S. l.]: Khronos Group, 2026c.
+Disponível em: https:
+//docs.vulkan.org/guide/latest/synchronization_examples.html.
+Acesso em: 17 set. 2026.
+KHRONOS GROUP.Vulkan specification: descriptor sets. [S. l.]: Khronos Group, 2026d.
+Disponível em: https:
+//docs.vulkan.org/spec/latest/chapters/descriptorsets.html.
+Acesso em: 17 set. 2026.
+KHRONOS GROUP.Vulkan specification: render pass. [S. l.]: Khronos Group, 2026e.
+Disponível em:
+https://docs.vulkan.org/spec/latest/chapters/renderpass.html.
+Acesso em: 17 set. 2026.
+KHRONOS GROUP.Vulkan specification: shader interfaces. [S. l.]: Khronos Group, 2026f.
+Disponível em:
+https://docs.vulkan.org/spec/latest/chapters/interfaces.html.
+Acesso em: 10 set. 2026.
+KHRONOS GROUP.Vulkan specification: synchronization and cache control. [S. l.]:
+Khronos Group, 2026g. Disponível em: https:
+//docs.vulkan.org/spec/latest/chapters/synchronization.html.
+Acesso em: 17 set. 2026.
+MCGUIRE, Morgan; MARA, Michael; LUEBKE, David. Scalable ambient obscurance.
+Eurographics/ACM SIGGRAPH Symposium on High Performance Graphics, p. 97–103, 2012.
+DOI: https://doi.org/10.2312/EGGH/HPG12/097-103.
+
+=================================== PÁGINA 30 ===================================
+29
+MITTRING, Martin. Finding next gen: CryEngine 2. In: ACM SIGGRAPH 2007 Courses.
+New York: ACM, 2007. DOI: https://doi.org/10.1145/1281500.1281671.
+NVIDIA. Overwatch graphics and performance guide. Guia técnico de configurações
+gráficas para PC, incluindo Ambient Occlusion. Disponível em:
+https://www.nvidia.com/en-us/geforce/news/overwatch-graphics-a
+nd-performance-guide/. Acesso em: 10 set. 2026.

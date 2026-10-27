@@ -1,0 +1,208 @@
+{
+  "projeto": "SSAO Vulkan no fork eruption-engine",
+  "referencia_github": "https://github.com/viniciusmedeirosdev/eruption-engine",
+  "commit_inspecionado": "7c053e6b5220d98af1af1462a4748df75d26a0c8",
+  "observacao": "Pacote de continuidade, PDFs e ordens para Codex; o codigo completo da engine deve ser clonado localmente. Este inventario nao lista a si proprio nem MANIFESTO_SHA256.txt para evitar recursao.",
+  "arquivos": [
+    {
+      "arquivo": "AGENTS.md",
+      "bytes": 1264,
+      "sha256": "401cbcd07789402cf70468f35bea94baff217ce6bf23d5169bd5c22b4c36e465"
+    },
+    {
+      "arquivo": "CONTINUAR_AQUI.md",
+      "bytes": 3770,
+      "sha256": "6aacf85caacb77e432de54c94ca95982993d9bd141ff35e122b89f8236a1ab8c"
+    },
+    {
+      "arquivo": "INICIAR_NO_LINUX.sh",
+      "bytes": 128,
+      "sha256": "db83bbfc6ac3c24dbf80f8539de96cb38cb1cb914293e0861d8f205d116251e9"
+    },
+    {
+      "arquivo": "INICIAR_NO_WINDOWS.bat",
+      "bytes": 434,
+      "sha256": "3a962ab5a2da89b10b670e9c59e68fe8ba1a97b071ea105c68aefdd47c216f0d"
+    },
+    {
+      "arquivo": "INSTALAR_ORDENS_NO_FORK.bat",
+      "bytes": 272,
+      "sha256": "e0aa67bad3c7c47762167445e7197b6c6c498eb4c3c62a289a65033b0e01875c"
+    },
+    {
+      "arquivo": "INSTALAR_ORDENS_NO_FORK.sh",
+      "bytes": 152,
+      "sha256": "53608c92c5837740e0835fbd1379042cd676b86ede8eb5d3671ee901bcdcba0a"
+    },
+    {
+      "arquivo": "LEIA_PRIMEIRO.md",
+      "bytes": 4705,
+      "sha256": "aa179f9f6e1c486caf9433aa1317c82f33ddfe4138ad565d586bfd2df6b19e7c"
+    },
+    {
+      "arquivo": "ORDENS_DE_CONTINUIDADE.md",
+      "bytes": 2236,
+      "sha256": "0247a4b2306575cb52a90fbab516621c44eaff66f4aa4c8f6475c4ea05adccc1"
+    },
+    {
+      "arquivo": "documentacao/01_CONTEXTO_E_HISTORICO.md",
+      "bytes": 2967,
+      "sha256": "0062af63c4685bcabc382e651b99f18603f1833781c0e40f4e2a511e04623cbc"
+    },
+    {
+      "arquivo": "documentacao/02_ARQUITETURA_E_FLUXO.md",
+      "bytes": 4468,
+      "sha256": "11c533f5a183e169de7ddb8b51c84eced4b2f952d4cb206f64ab4530bf9787b7"
+    },
+    {
+      "arquivo": "documentacao/03_INSTALAR_EXECUTAR_UBUNTU.md",
+      "bytes": 3904,
+      "sha256": "f4ca1a1c0dc74750bc10fa78362af61482d9e173f1776307bb4abf978a135509"
+    },
+    {
+      "arquivo": "documentacao/04_WINDOWS_E_WSL2.md",
+      "bytes": 2199,
+      "sha256": "60e988197cf74a9acb47de466d99747e5a6b7971357886d2047e34e216f8d726"
+    },
+    {
+      "arquivo": "documentacao/05_MAPA_DOS_ARQUIVOS.md",
+      "bytes": 3201,
+      "sha256": "d8426aa60e1d4a09bbe0cc7e0c1a1c8b9c0d98dd4fa25f7232912fa7e1eb7c3f"
+    },
+    {
+      "arquivo": "documentacao/06_TESTES_E_EVIDENCIAS.md",
+      "bytes": 2768,
+      "sha256": "9365120f21ee1879cdb5dda52aa2f83df1757e4cfdbbaa1b4fc3f3bdc49a3f0b"
+    },
+    {
+      "arquivo": "documentacao/07_DIFERENCAS_COM_ENTREGAS_1_A_3.md",
+      "bytes": 2492,
+      "sha256": "1b575c8adae5a238bfd4561f7aa2e8244810b39556209ced32b1be4b889d5688"
+    },
+    {
+      "arquivo": "documentacao/08_PLANO_DE_CONTINUIDADE.md",
+      "bytes": 3068,
+      "sha256": "453b5facce92320f53b70a4b27595b4b231ed8dfa71bc25c363d364742d6733c"
+    },
+    {
+      "arquivo": "documentacao/09_FLUXO_GITHUB.md",
+      "bytes": 1804,
+      "sha256": "14ad7e8c0141fa6df05fe06c85f387a6403103c73ae383b64d22dbc2a28566d4"
+    },
+    {
+      "arquivo": "documentacao/10_CHECKLIST_ENTREGA_FINAL.md",
+      "bytes": 2020,
+      "sha256": "b523ff73ca93f5d46669ead74d0829034238ef1a648c0e89cf3539b9a1a2f080"
+    },
+    {
+      "arquivo": "documentacao/11_PROMPT_PARA_AGENTE_CODIGO.md",
+      "bytes": 2546,
+      "sha256": "f2ed6e1b9e8ebbf6d57b3158da2a91fa0638eef2fff9cc081aea7871f6871365"
+    },
+    {
+      "arquivo": "documentacao/12_PROVENIENCIA_E_LIMITACOES.md",
+      "bytes": 2126,
+      "sha256": "a85bf7da8be1e8d2ee4c3692e002d2739751bd3fece5ddd7134d15944b004a3d"
+    },
+    {
+      "arquivo": "documentacao/entregas_academicas/Entrega_1_e_2_TEXTO_EXTRAIDO.txt",
+      "bytes": 54724,
+      "sha256": "67b9e5ef7b91673cc7114fb3110b7dd1ac4f882371470e537fa58ce2f44d190e"
+    },
+    {
+      "arquivo": "documentacao/entregas_academicas/Entrega_3_Pseudocodigo_SSAO.pdf",
+      "bytes": 299352,
+      "sha256": "8a34cd407aa93ab1d0333b757daed065d5910ec64fcbd2b71ce189f2db9d85c7"
+    },
+    {
+      "arquivo": "documentacao/entregas_academicas/Entrega_3_TEXTO_EXTRAIDO.txt",
+      "bytes": 49460,
+      "sha256": "f05c451750714e5f6d584d691b767052ef90640b39ff0509292547edd0a110bf"
+    },
+    {
+      "arquivo": "documentacao/entregas_academicas/SSAO_Entregas_1_e_2.pdf",
+      "bytes": 10774389,
+      "sha256": "f477eab1a8f0d55b694033880b07c44cdb719f185f21206a7dd5320906addb5d"
+    },
+    {
+      "arquivo": "ordens_para_fork/AGENTS.md",
+      "bytes": 3652,
+      "sha256": "05575434d54db3401c0a5e059b2ba18c800b19fa41000d660b77cdedd5182491"
+    },
+    {
+      "arquivo": "ordens_para_fork/docs/SSAO_CRITERIOS_DE_ACEITE.md",
+      "bytes": 1931,
+      "sha256": "f01c6a9c41ed1d7e02c3e200b1abb7bd536d890f64224d3902d9c0d411fe4079"
+    },
+    {
+      "arquivo": "ordens_para_fork/docs/SSAO_ESTADO_ATUAL.md",
+      "bytes": 2447,
+      "sha256": "adfaf6077dba4173d2571ff709959f95749549cdbb6bfef3061f90ae3d6ca59a"
+    },
+    {
+      "arquivo": "ordens_para_fork/docs/SSAO_ORDEM_DE_EXECUCAO.md",
+      "bytes": 6984,
+      "sha256": "c3ad312b975d313d4ff6f2232d380ba70e45623597500cc63732cec8a74e16f5"
+    },
+    {
+      "arquivo": "ordens_para_fork/docs/SSAO_PROMPTS_PARA_AGENTES.md",
+      "bytes": 3202,
+      "sha256": "049e3fb19457878bb81eb7f1087d39e18edfb4a1f6649d2cb3e53fc3de60d1af"
+    },
+    {
+      "arquivo": "referencias/README_REFERENCIAS.md",
+      "bytes": 486,
+      "sha256": "95695883f62793ae11bfe1b82e601902afe9871dd6d1e40b83f3a0a5281a5a87"
+    },
+    {
+      "arquivo": "referencias/pipeline_ssao.dot",
+      "bytes": 826,
+      "sha256": "20f65c6a19baee11ea5c66507ec4d845ac2ac3e6f72e394d69995f44641f1163"
+    },
+    {
+      "arquivo": "referencias/pipeline_ssao.svg",
+      "bytes": 6806,
+      "sha256": "d62dee788da7c572422d8ec5bb815d6d01f6268815b133c9338e5c92f8f0e3b3"
+    },
+    {
+      "arquivo": "scripts/auditar_repositorio.py",
+      "bytes": 2400,
+      "sha256": "a8490a7e96fa3dcc92d034c163055d0341fd5c4922f18813da0f29ea7f422cb8"
+    },
+    {
+      "arquivo": "scripts/capturar_evidencias_linux.sh",
+      "bytes": 613,
+      "sha256": "7f2df91945b2cf4cf65d507d4c71b47d082bfa453f9ad1e2f7f484f45e167623"
+    },
+    {
+      "arquivo": "scripts/gerar_zip_fontes.py",
+      "bytes": 2538,
+      "sha256": "c47e165d235c6cd4a6e2d9fe9cc6aa5b60360cda226139bd10c0151c816031ea"
+    },
+    {
+      "arquivo": "scripts/iniciar_linux.sh",
+      "bytes": 1589,
+      "sha256": "d55c60aba0aaf974f3a77fdf03e01f557d06628d48c5086632c4d2c01fa86b9a"
+    },
+    {
+      "arquivo": "scripts/iniciar_windows.ps1",
+      "bytes": 2237,
+      "sha256": "9b92d70ebfa70f4f97a49e945162087cb51c6fc24bc41d1a5f79c27077e8d9d6"
+    },
+    {
+      "arquivo": "scripts/instalar_ordens_no_fork.py",
+      "bytes": 2578,
+      "sha256": "e6ab703eda691d53707445b19e3264878c5745b7b0304cf0bb0e38aa0e6cc80c"
+    },
+    {
+      "arquivo": "scripts/testar_projeto_linux.sh",
+      "bytes": 681,
+      "sha256": "6d38bf26a6ebdafac85acec39f379b60ab88886f1f43ed158b0c3e6bbbb91530"
+    },
+    {
+      "arquivo": "scripts/verificar_ambiente_ubuntu.sh",
+      "bytes": 934,
+      "sha256": "89b8fcdd3e4aa3be900131705063641b6c5120bafa170538a106d35ce4da1de9"
+    }
+  ]
+}

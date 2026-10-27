@@ -1,0 +1,50 @@
+# Inventário dos textos adicionados
+
+- `AGENTS.md`
+- `docs/SSAO_CRITERIOS_DE_ACEITE.md`
+- `docs/SSAO_ESTADO_ATUAL.md`
+- `docs/SSAO_ORDEM_DE_EXECUCAO.md`
+- `docs/SSAO_PROMPTS_PARA_AGENTES.md`
+- `docs/projeto_ssao/README.md`
+- `docs/projeto_ssao/pacote_original/AGENTS.md`
+- `docs/projeto_ssao/pacote_original/CONTINUAR_AQUI.md`
+- `docs/projeto_ssao/pacote_original/INICIAR_NO_LINUX.sh`
+- `docs/projeto_ssao/pacote_original/INICIAR_NO_WINDOWS.bat`
+- `docs/projeto_ssao/pacote_original/INSTALAR_ORDENS_NO_FORK.bat`
+- `docs/projeto_ssao/pacote_original/INSTALAR_ORDENS_NO_FORK.sh`
+- `docs/projeto_ssao/pacote_original/INVENTARIO_ARQUIVOS.json`
+- `docs/projeto_ssao/pacote_original/LEIA_PRIMEIRO.md`
+- `docs/projeto_ssao/pacote_original/MANIFESTO_SHA256.txt`
+- `docs/projeto_ssao/pacote_original/ORDENS_DE_CONTINUIDADE.md`
+- `docs/projeto_ssao/pacote_original/documentacao/01_CONTEXTO_E_HISTORICO.md`
+- `docs/projeto_ssao/pacote_original/documentacao/02_ARQUITETURA_E_FLUXO.md`
+- `docs/projeto_ssao/pacote_original/documentacao/03_INSTALAR_EXECUTAR_UBUNTU.md`
+- `docs/projeto_ssao/pacote_original/documentacao/04_WINDOWS_E_WSL2.md`
+- `docs/projeto_ssao/pacote_original/documentacao/05_MAPA_DOS_ARQUIVOS.md`
+- `docs/projeto_ssao/pacote_original/documentacao/06_TESTES_E_EVIDENCIAS.md`
+- `docs/projeto_ssao/pacote_original/documentacao/07_DIFERENCAS_COM_ENTREGAS_1_A_3.md`
+- `docs/projeto_ssao/pacote_original/documentacao/08_PLANO_DE_CONTINUIDADE.md`
+- `docs/projeto_ssao/pacote_original/documentacao/09_FLUXO_GITHUB.md`
+- `docs/projeto_ssao/pacote_original/documentacao/10_CHECKLIST_ENTREGA_FINAL.md`
+- `docs/projeto_ssao/pacote_original/documentacao/11_PROMPT_PARA_AGENTE_CODIGO.md`
+- `docs/projeto_ssao/pacote_original/documentacao/12_PROVENIENCIA_E_LIMITACOES.md`
+- `docs/projeto_ssao/pacote_original/documentacao/entregas_academicas/Entrega_1_e_2_TEXTO_EXTRAIDO.txt`
+- `docs/projeto_ssao/pacote_original/documentacao/entregas_academicas/Entrega_3_TEXTO_EXTRAIDO.txt`
+- `docs/projeto_ssao/pacote_original/ordens_para_fork/AGENTS.md`
+- `docs/projeto_ssao/pacote_original/ordens_para_fork/docs/SSAO_CRITERIOS_DE_ACEITE.md`
+- `docs/projeto_ssao/pacote_original/ordens_para_fork/docs/SSAO_ESTADO_ATUAL.md`
+- `docs/projeto_ssao/pacote_original/ordens_para_fork/docs/SSAO_ORDEM_DE_EXECUCAO.md`
+- `docs/projeto_ssao/pacote_original/ordens_para_fork/docs/SSAO_PROMPTS_PARA_AGENTES.md`
+- `docs/projeto_ssao/pacote_original/referencias/README_REFERENCIAS.md`
+- `docs/projeto_ssao/pacote_original/referencias/pipeline_ssao.dot`
+- `docs/projeto_ssao/pacote_original/referencias/pipeline_ssao.svg`
+- `docs/projeto_ssao/pacote_original/scripts/auditar_repositorio.py`
+- `docs/projeto_ssao/pacote_original/scripts/capturar_evidencias_linux.sh`
+- `docs/projeto_ssao/pacote_original/scripts/gerar_zip_fontes.py`
+- `docs/projeto_ssao/pacote_original/scripts/iniciar_linux.sh`
+- `docs/projeto_ssao/pacote_original/scripts/iniciar_windows.ps1`
+- `docs/projeto_ssao/pacote_original/scripts/instalar_ordens_no_fork.py`
+- `docs/projeto_ssao/pacote_original/scripts/testar_projeto_linux.sh`
+- `docs/projeto_ssao/pacote_original/scripts/verificar_ambiente_ubuntu.sh`
+
+Os PDFs do pacote não foram inseridos nesta primeira carga textual.

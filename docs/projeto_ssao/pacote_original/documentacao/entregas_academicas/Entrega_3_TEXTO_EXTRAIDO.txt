@@ -1,0 +1,1031 @@
+TEXTO EXTRAIDO AUTOMATICAMENTE. PARA EQUACOES, FIGURAS E DIAGRAMAS, CONSULTE O PDF ORIGINAL.
+
+
+=================================== PÁGINA 1 ===================================
+UNIVERSIDADE CA TÓLICA DE SANTOS
+DISCIPLINA DE COMPUTA ÇÃ O GRÁFICA
+FELIPE DO PRADO MARQUES SOUZA - 5898828
+KENUI MATHEUS NASCIMENTO RU AS - 6251479
+VINICIUS MEDEIROS PERES - 5834983
+VITOR AMORIM TARTARI - 3492050
+AMBIENT OCCLUSION EM ESP A ÇO DE TELA (SSA O)
+Entrega 3 - Pseudocódigo dos Shaders (GLSL)
+Santos - SP
+2026
+
+=================================== PÁGINA 2 ===================================
+2
+Sumário
+1 Objetivo e continuidade do projeto 3
+1.1 Arquivos e objetivos . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3
+1.2 Convenções comuns . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3
+2 Fluxo entre os shaders 4
+2.1 Preparação e execução dos passes . . . . . . . . . . . . . . . . . . . . . . . . . 4
+2.2 Entradas e saídas das interfaces . . . . . . . . . . . . . . . . . . . . . . . . . . 4
+3 Recursos e contrato dos dados 5
+3.1 Buffers, tipos e alinhamento . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+3.2 Descriptor sets e bindings . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+3.3 Imagens, samplers e níveis de mipmap . . . . . . . . . . . . . . . . . . . . . . 6
+4 Lógica matemática do efeito 6
+4.1 Transformação e rasterização . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+4.2 Reconstrução a partir de profundidade . . . . . . . . . . . . . . . . . . . . . . 7
+4.3 Núcleo hemisférico e textura de ruído . . . . . . . . . . . . . . . . . . . . . . 7
+4.4 Projeção, bloqueio e acessibilidade . . . . . . . . . . . . . . . . . . . . . . . . 8
+4.5 Filtro bilateral . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+4.6 Composição da iluminação . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+5 Parâmetros, condições e resultados esperados 10
+5.1 V alores iniciais e validação dos dados . . . . . . . . . . . . . . . . . . . . . . 10
+5.2 Casos de comportamento esperado . . . . . . . . . . . . . . . . . . . . . . . . 10
+5.3 Relação com SSA O e limites da aproximação . . . . . . . . . . . . . . . . . . 11
+6 Pseudocódigo completo dos shaders 12
+6.1 geometry.vert . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 12
+6.2 geometry.frag . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13
+6.3 fullscreen.vert . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14
+6.4 ssao.frag . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14
+6.5 bilateral.frag . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17
+6.6 lighting.frag . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19
+Referências 22
+
+=================================== PÁGINA 3 ===================================
+3
+1 Objetivo e continuidade do projeto
+Esta entrega descreve a lógica dos shaders que implementam a oclusão de ambiente em espaço
+de tela (SSA O) na arquitetura definida na Entrega 2. O efeito estima a redução da iluminação
+ambiente em regiões próximas a outras superfícies, usando a profundidade e as normais da
+imagem atual. O valor produzido é uma acessibilidade: 1 indica uma região aberta e 0 indica
+oclusão máxima na aproximação adotada.
+São mantidos os quatro passes gráficos, a resolução completa, o núcleo com 32 amostras
+e o filtro bilateral 5 × 5. O escopo inclui geometria opaca, uma luz direcional e uma cor de
+material por objeto. Não há compute shader nesta arquitetura; por isso, a entrega contém dois
+arquivos .vert e quatro arquivos .frag. O vertex shader de tela cheia é reutilizado em três
+passes.
+Os arquivos apresentam pseudocódigo com sintaxe próxima de GLSL 450 e funções
+auxiliares explicitadas. Eles especificam a lógica para uma futura implementação, sem
+constituir uma aplicação Vulkan integrada. As funções repetidas nos arquivos mantêm cada
+shader independente de arquivos de inclusão. Os comentários explicam o papel dos dados e das
+operações junto ao trecho correspondente.
+1.1 Arquivos e objetivos
+Arquivo Tipo Objetivo
+geometry.vert V ertex Transformar posições e normais para os espaços usados no
+G-buffer.
+geometry.frag Fragment Gravar a normal em visão e a cor linear do material.
+fullscreen.vert V ertex Cobrir a tela com um triângulo nos passes de pós-processamento.
+ssao.frag Fragment Estimar a acessibilidade com 32 candidatos no hemisfério da
+normal.
+bilateral.frag Fragment Reduzir o ruído preservando descontinuidades geométricas.
+lighting.frag Fragment Combinar luz direta e luz ambiente modulada pelo SSA O.
+1.2 Convenções comuns
+As matrizes multiplicam vetores-coluna. O espaço de visão usa uma câmera voltada para −Z:
+pontos visíveis têm z < 0. A projeção P já inclui a adaptação ao Vulkan, com profundidade
+NDC em [0, 1] e orientação vertical compatível com um viewport de altura positiva. A inversa
+usada na reconstrução é a inversa dessa mesma matriz, inclusive a adaptação vertical.
+O viewport começa em (0, 0) e ocupa W × H pixels. Sua profundidade mínima é 0 e
+a máxima é 1. O G-buffer usa teste LESS, escrita de profundidade habilitada e limpeza em 1.
+Nesse contrato, d = 1identifica o fundo; d = 0é uma profundidade válida. Não se usa reversed-
+Z, MSAA ou profundidade logarítmica. Essas convenções seguem a descrição de viewport e
+profundidade do Khronos Group (2026a).
+
+=================================== PÁGINA 4 ===================================
+4
+2 Fluxo entre os shaders
+2.1 Preparação e execução dos passes
+A CPU disponibiliza posições, normais e índices, matrizes da câmera e dos objetos, parâmetros,
+materiais, núcleo e ruído. A ordem dos passes e suas dependências são as seguintes:
+1. RP0 - G-buffer . geometry.vert transforma os vértices. A rasterização interpola as
+normais e gera fragmentos. geometry.frag grava gNormal e gAlbedo; os testes de
+profundidade selecionam a superfície e gravam gDepth.
+2. RP1 - SSA O. fullscreen.vert gera o triângulo de tela cheia. ssao.frag lê
+profundidade, normais, ruído e núcleo, reconstruindo as posições para produzir aoRaw.
+3. RP2 - filtro bilateral. O mesmo vertex shader é reutilizado. bilateral.frag lê aoRaw,
+profundidade e normais e escreve uma imagem distinta, aoFiltered.
+4. RP3 - composição. O triângulo de tela cheia executa lighting.frag, que lê albedo,
+normal, profundidade e A O filtrado e escreve a cor final na imagem da swapchain.
+O fluxo principal é G-buffer → SSA O→ filtro bilateral → composição. Há também
+leituras diretas de profundidade e normais nos passes RP2 e RP3, e de albedo em RP3. Não existe
+comunicação direta entre invocações de fragment shader: as imagens intermediárias transportam
+os resultados entre passes.
+As barreiras permanecem sob responsabilidade da aplicação: B1/B2 tornam o G-buffer
+legível; B3 disponibiliza aoRaw; B4 disponibiliza aoFiltered; B5/B6 tratam a imagem de
+apresentação. Escritas de attachments de cor e profundidade devem estar concluídas e visíveis
+antes das leituras pelos fragment shaders. Não se usa barrier() dentro dos shaders para
+substituir essa sincronização. Cada passe mantém um subpass de índice 0, como na Entrega 2.
+2.2 Entradas e saídas das interfaces
+Etapa Informação que entra Resultado produzido
+V ertex de RP0 vec3 posição (location 0) e normal
+(location 1) em objeto; matrizes.
+gl_Position: vec4 em clip;
+normalView: vec3 em location 0.
+Fragment de
+RP0
+Normal interpolada em location 0; cor
+do material.
+vec4 normal (location 0), vec4 albedo
+(location 1). Profundidade pelo pipeline
+fixo.
+V ertex de RP1–
+RP3
+gl_VertexIndex: inteiro 0, 1 ou 2. gl_Position: triângulo sem vertex
+buffer, sem varyings.
+Fragment de
+RP1
+gl_FragCoord, profundidade, normal,
+ruído e núcleo.
+float acessibilidade bruta, location 0.
+Fragment de
+RP2
+gl_FragCoord, A O bruto, profundidade
+e normal.
+float acessibilidade filtrada, location 0.
+Fragment de
+RP3
+gl_FragCoord, albedo, normal, A O
+filtrado, profundidade e luz.
+vec4 RGBA linear, location 0.
+
+=================================== PÁGINA 5 ===================================
+5
+3 Recursos e contrato dos dados
+3.1 Buffers, tipos e alinhamento
+Os UBOs seguem std140; cada mat4 ocupa 64 bytes e cada vec4 ocupa 16 bytes. As matrizes
+são armazenadas por colunas. A CPU deve respeitar os offsets e o alinhamento exigido para a
+alocação dos buffers (KHRONOS GROUP , 2026b).
+Campo de FrameUBO Offset Tipo Significado
+view 0 mat4 V : mundo para visão.
+proj 64 mat4 P: visão para clip Vulkan.
+invProj 128 mat4 P−1: reconstrução.
+aoParams 192 vec4 (R, β, γ, σs).
+viewport 208 vec4 (W, H, 1/W,1/H).
+lightDir 224 vec4 Direção para a luz em visão; w reservado.
+lightColor 240 vec4 RGB linear da luz; w reservado.
+ambient 256 vec4 RGB linear ambiente; w reservado.
+FrameUBO totaliza 272 bytes. O campo viewport é preservado para manter a interface da
+Entrega 2; os fragment shaders obtêm o tamanho efetivo com textureSize, evitando depender
+de uma resolução desatualizada no cálculo de UV . A CPU deve atualizar ambos de forma
+consistente.
+KernelUBO contém vec4 samples[32]: 512 bytes, stride 16, componentes xyz usadas
+e w reservado. MaterialUBO contém vec4 baseColor: 16 bytes, cor linear e alpha 1. As push
+constants ocupam 128 bytes: model no offset 0 e normalView no offset 64. A segunda matriz
+contém (V M )−T ; apenas seu bloco 3 × 3 transforma a normal.
+O vertex buffer é intercalado, com stride 24 bytes: posiçãovec3 no offset 0 e normalvec3
+no offset 12. O index buffer contémuint32, 4 bytes por índice, com topologia de triângulos. Não
+são UBOs e não usam std140. Não há SSBOs, storage images, input attachments ou buffers de
+compute nesta variante.
+3.2 Descriptor sets e bindings
+Passe Set:binding Recurso Tipo / uso
+T odos 0:0 FrameUBO UBO global; visível em VS e FS.
+RP1 0:1 KernelUBO UBO das 32 amostras; FS.
+RP0 1:0 MaterialUBO UBO do material; FS.
+RP1 1:0, 1:1, 1:2 gDepth, gNormal,
+noiseT exture
+Combined image sampler; FS.
+RP2 1:0, 1:1, 1:2 aoRaw , gDepth,
+gNormal
+Combined image sampler; FS.
+RP3 1:0, 1:1, 1:2,
+1:3
+gAlbedo, gNormal,
+aoFiltered, gDepth
+Combined image sampler; FS.
+
+=================================== PÁGINA 6 ===================================
+6
+O layout de set 0 é comum aos pipelines, mesmo quando o shader não lê todos os bindings.
+Os layouts de set 1 variam por passe e devem ser vinculados novamente. Os shaders declaram
+apenas os recursos usados. Cada binding tem um descriptor; as 32 amostras são elementos
+internos de um UBO.
+3.3 Imagens, samplers e níveis de mipmap
+Imagem Formato Conteúdo
+gDepth D32_SFLO AT Profundidade convencional, [0, 1], view de aspecto depth.
+gNormal RGBA16F Normal unitária assinada em RGB; alpha 1, sem
+remapeamento para [0, 1].
+gAlbedo RGBA8_UNORM Cor linear RGB; alpha 1.
+aoRaw / aoFiltered R16F Acessibilidade [0, 1] em canal único.
+noiseT exture RGBA32F 4 × 4 vetores (x, y, 0, 0) assinados.
+swapImage sRGB Destino LDR, por exemplo B8G8R8A8_SRGB.
+T odas as imagens intermediárias de tela têm tamanhoW ×H, uma camada, uma amostra
+e apenas o mip 0. São usados sampler2D comuns, com comparação desabilitada, coordenadas
+normalizadas, anisotropia desabilitada, filtros de minificação/magnificação NEAREST, mipmap
+mode NEAREST e minLod=maxLod=0. Imagens de tela usam CLAMP_TO_EDGE; o ruído usa REPEAT.
+texelFetch(image,pixel,0) lê exatamente um texel no nível 0, sem interpolação e
+sem aplicar os modos de endereçamento do sampler. Por isso, os índices são validados antes
+da leitura. No SSA O, a projeção do candidato é convertida ao índice do texel mais próximo
+conforme a discretização floor(uv*size). A posição de cena é reconstruída no centro desse
+texel, não no UV contínuo do candidato.
+O ruído é lido por textureLod(noiseTexture,uv*size/4,0): usa UV normalizado,
+repetição e filtro nearest, fixando explicitamente LOD 0. Isso repete os 16 vetores a cada quatro
+pixels sem misturar direções. Não há geração de mipmaps nem derivadas implícitas para escolher
+níveis. As funções de amostragem seguem as definições GLSL do Khronos Group (2026c).
+4 Lógica matemática do efeito
+4.1 T ransformação e rasterização
+Para a posição xo no espaço do objeto, a transformação é
+xv = V M
+(
+xo
+1
+)
+, x c = Pxv. (1)
+M transforma objeto em mundo, V transforma mundo em visão e P projeta visão em clip. O
+shader grava xc em gl_Position; o rasterizador faz recorte e divisão por w. A profundidade é
+
+=================================== PÁGINA 7 ===================================
+7
+gerada pela rasterização e pelo teste fixo, sem gl_FragDepth.
+A normal de entrada no é transformada por
+nv = normalize
+([
+(V M )−1]T
+3×3 no
+)
+. (2)
+A inversa transposta preserva a perpendicularidade sob escalas não uniformes. O vertex shader
+transmite a normal transformada; a normalização definitiva ocorre no fragment shader, depois
+da interpolação. Matrizes singulares e dados de malha inválidos devem ser rejeitados pela CPU
+antes do desenho.
+4.2 Reconstrução a partir de profundidade
+Para o pixel inteiro (x, y), o centro em coordenadas de textura e a reconstrução são
+u = x + 0,5
+W , v = y + 0,5
+H , h = P−1(2u − 1, 2v − 1, d, 1)T , p = hxyz
+hw
+. (3)
+p é a posição em visão e d é a leitura do depth buffer. No Vulkan desta arquitetura, usa-se d
+diretamente: não se aplica 2d − 1. V alores não finitos,|hw| ≤ ε ou posições reconstruídas com
+pz ≥ 0 são rejeitados. A constante ε = 10−6 protege operações numéricas; ela não substitui o
+bias geométrico β.
+4.3 Núcleo hemisférico e textura de ruído
+O núcleo é preparado uma vez na CPU e reutilizado. Uma geração determinística, sem laços
+de rejeição, pode usar a sequência abaixo. Cada chamada de random01 devolve um float em
+[0, 1); o estado usa aritmética uint32 modular. O fator radial concentra parte das amostras nas
+proximidades da origem.
+1 // Preparacao na CPU, apresentada com sintaxe semelhante a GLSL.
+2 // Nao e um compute shader e nao exige arquivo .comp.
+3 uint state = 2026u;
+4 vec4 samples[32]; // Dados destinados ao KernelUBO.
+5 vec4 noise[4][4]; // Texels RGBA da imagem de ruido, por linha.
+6 float random01() {
+7 state = 1664525u ∗ state + 1013904223u; // Modulo 2^32.
+8 return float(state >> 8u) / 16777216.0;
+9 }
+10 const float PI = 3.141592653589793;
+11 for (int i=0; i<32; ++i) {
+12 float z = random01(); // Altura uniforme no hemisferio.
+13 float phi = 2.0∗PI∗random01(); // Azimute em radianos.
+14 float xy = sqrt(max(0.0, 1.0−z∗z)); // Raio da secao XY.
+15 vec3 direction = vec3(xy∗cos(phi), xy∗sin(phi), z);
+16 float t = float(i)/31.0; // Indice normalizado no nucleo.
+17 float scale = mix(0.1, 1.0, t∗t); // Limite radial por indice.
+18 float rho = mix(0.1, 1.0, random01()) ∗ scale; // Raio local.
+19 samples[i] = vec4(direction∗rho, 0.0);
+
+=================================== PÁGINA 8 ===================================
+8
+20 } // Exatamente 32 vetores, comprimento em (0,1].
+21 for (int j=0; j<16; ++j) {
+22 float theta = 2.0∗PI∗random01(); // Angulo do ruido em radianos.
+23 noise[j/4][j%4] = vec4(cos(theta), sin(theta), 0.0, 0.0);
+24 } // Exatamente 16 texels: linha j/4, coluna j%4.
+O vetor de ruído r orienta a tangente. Aplica-se Gram-Schmidt:
+t = normalize(r − n(n · r)), b = normalize(n × t), T BN = [t b n ]. (4)
+Se r for paralelo à normal, escolhe-se um eixo auxiliar não paralelo e forma-se t por produto
+vetorial. Assim, uma normal alinhada com o ruído não causa divisão por zero. Para a amostra
+local ki e raio R em unidades da cena, o ponto candidato é
+qi = p + R T BN k i. (5)
+O núcleo já contém o fator radial; normalizarki no shader eliminaria essa distribuição e, portanto,
+não é feito.
+4.4 Projeção, bloqueio e acessibilidade
+Cada candidato é projetado: c = P(qi, 1)T , s = cxyz /cw e uvi = sxy/2 + 1/2. Rejeitam-se
+candidatos atrás da câmera, cw ≤ ε, valores não finitos, profundidade NDC fora de [0, 1] e UV
+fora de [0, 1)2. Não se limita uma amostra externa à borda, pois isso repetiria oclusores artificiais.
+Após localizar o texel correspondente, reconstrói-se a profundidade em visãozcena. Para
+a câmera voltada para −Z, o teste e o peso são
+oi =
+
+
+
+1, z cena ≥ qi,z + β,
+0, caso contrário,
+wi = smoothstep
+(
+0, 1, R
+max(|pz − zcena|, ε)
+)
+. (6)
+Um z maior está mais próximo da câmera. Por exemplo, zcena = −2, qi,z = −3 e β = 0,025
+satisfazem o teste; zcena = −4 não satisfaz. O peso atenua diferenças grandes de profundidade; é
+uma aproximação por alcance emZ, não um teste exato de distância euclidiana nem uma solução
+de visibilidade por raios. Para a = clamp(R/ max(|pz − zcena|, ε), 0, 1), smoothstep(0,1,...)
+equivale a a2(3 − 2a).
+A acessibilidade bruta é
+A =
+
+
+
+clamp
+(
+1 −
+∑
+i∈V wioi
+Nv
+, 0, 1
+)
+, N v > 0,
+1, Nv = 0.
+(7)
+V é o conjunto de candidatos válidos eNv sua quantidade. Um texel de fundo (d = 1) representa
+uma amostra observável sem bloqueio: entra em Nv e contribui zero para a soma. Dados
+
+=================================== PÁGINA 9 ===================================
+9
+inválidos e candidatos fora da tela não entram no denominador. A normalização usa a quantidade
+de amostras, e não a soma dos pesos, preservando a atenuação por alcance.
+O laço executa exatamente 32 tentativas; continue pula um candidato, sem repetir a
+tentativa. O shader retorna 1 para um pixel central de fundo, raio inválido ou ausência de
+candidatos válidos. O expoente de intensidade não é aplicado nesta etapa.
+4.5 Filtro bilateral
+Para o pixel central x e o vizinho y, o peso combina distância espacial, profundidade em visão
+e semelhança entre normais unitárias:
+wxy = exp
+(
+−∥x − y∥2
+2σ2
+s
+)
+exp
+(
+−(zx − zy)2
+2σ2
+z
+)
+[clamp(nx · ny, 0, 1)]k , (8)
+Af (x) =
+∑
+y∈N(x) wxyA(y)∑
+y∈N(x) wxy
+. (9)
+N(x) contém a janela 5×5, com deslocamentos de−2 a 2 em cada eixo. σs é medido em pixels;
+σz usa unidades da cena; k é adimensional. Normais ortogonais ou opostas recebem peso zero.
+Diferenças de profundidade são suavemente atenuadas, sem um limiar binário adicional.
+O centro é incluído com peso exatamente 1, e os dois laços visitam as outras 24 posições.
+Coordenadas externas, fundo, normal inválida ou A O não finito são ignorados. Se todos os
+vizinhos forem rejeitados, o resultado permanece igual ao centro. Parâmetros de filtro inválidos
+também preservam o valor central. Os IDs de especialização 0 e 1 definem σz e k, mantendo o
+tamanho de FrameUBO da Entrega 2.
+4.6 Composição da iluminação
+Com normal n, direção unitária para a luzl, cor linear do materiala, luz direcionalLd e ambiente
+La, calcula-se
+Clinear = a ⊙
+[
+Ld max(n · l, 0) +La Aγ
+f
+]
+. (10)
+⊙ indica multiplicação componente a componente em RGB. Este modelo didático usa a
+intensidade difusa já parametrizada em Ld, sem especular ou normalização radiométrica
+adicional. Apenas a parcela ambiente é multiplicada pela acessibilidade. γ > 1 reforça o
+escurecimento; 0 < γ < 1 o reduz; γ = 1 mantém o resultado filtrado. Esse expoente não é
+uma correção de gama da cor.
+O fundo recebe RGB linear (0,02; 0,025; 0,04) e alpha 1. Cores finais são limitadas a
+[0, 1] nesta saída LDR. O attachment sRGB faz a conversão de saída; o shader não aplica uma
+segunda transformação pow(color,1/2.2). Uma versão HDR com tone mapping fica fora do
+escopo desta arquitetura.
+
+=================================== PÁGINA 10 ===================================
+10
+5 Parâmetros, condições e resultados esperados
+5.1 V alores iniciais e validação dos dados
+Para uma cena modelada em metros, os valores iniciais propostos são R = 0,5 m, β = 0,025
+m, γ = 1 , σs = 2 pixels, σz = 0 ,10 m e k = 8 . São pontos de partida para a futura
+implementação, não valores universais. Raio e bias devem acompanhar a escala da cena. A
+CPU valida valores finitos, matrizes invertíveis, índices dentro da malha, W, H > 0, imagens
+com extensões compatíveis e descritores corretos antes do desenho.
+Os shaders verificam dados amostrados, comprimentos de vetores e divisores. Uma
+normal inválida em RP0 provoca discard, impedindo que esse fragmento grave cor e
+profundidade. Por isso não é declarado early_fragment_tests. A CPU continua responsável
+por rejeitar uma primitiva com vértices inválidos: um vertex shader isolado não consegue
+descartar de forma geral a primitiva inteira.
+Recursos não vinculados, descritores inválidos e violações de memória da aplicação não
+são erros recuperáveis por estas verificações. A prevenção pertence à configuração Vulkan,
+conforme o contrato da Entrega 2. Os retornos defensivos dos shaders tratam valores numéricos
+e limites acessíveis dentro de recursos corretamente vinculados.
+5.2 Casos de comportamento esperado
+Caso Resultado esperado
+Fundo ou pixel sem
+geometria
+A O bruto e filtrado iguais a 1; composição usa a cor de fundo.
+Plano isolado voltado para
+a câmera
+Amostras à frente do plano não ficam bloqueadas pelo próprio plano; A O
+próximo de 1.
+Contato entre chão e parede Parte do hemisfério encontra a parede ou o chão; ambiente fica mais
+escuro.
+Candidato fora da tela Amostra ignorada; pode haver perda de oclusão na borda.
+Ruído paralelo à normal Eixo alternativo mantém a base ortonormal válida.
+Normal nula ou dado não
+finito
+Fragmento descartado em RP0; retornos conservadores nos passes
+seguintes.
+Janela bilateral
+atravessando uma borda
+Pesos de profundidade e normal reduzem a mistura entre superfícies.
+Ausência de vizinhos
+válidos no filtro
+V alor central preservado; denominador não zera.
+Luz apontando para trás da
+superfície
+Parcela direta zero; ambiente continua dependendo de A O.
+A O igual a 1 ou 0 Ambiente integral ou ambiente nulo, respectivamente; luz direta
+preservada.
+
+=================================== PÁGINA 11 ===================================
+11
+5.3 Relação com SSA O e limites da aproximação
+A profundidade fornece a geometria visível, a normal orienta o hemisfério e a projeção permite
+consultar candidatos em espaço de tela. O ruído distribui o padrão das amostras; o filtro
+bilateral reduz essa variação sem tratar toda a imagem como uma superfície contínua. A
+composição converte a acessibilidade em escurecimento da iluminação ambiente, reforçando
+cantos, cavidades e contatos.
+Como outras aproximações em espaço de tela, o algoritmo só conhece a primeira camada
+de profundidade do quadro atual. Objetos ocultos ou fora do enquadramento não participam da
+estimativa. Podem ocorrer halos e variação nas bordas; sem acumulação temporal, o padrão
+também pode oscilar durante o movimento. Esses limites são discutidos por Bavoil e Sainz
+(2008). A presente solução usa amostragem hemisférica didática; não reproduz o algoritmo
+HBA O dessa publicação.
+O custo principal por pixel é o laço de 32 candidatos do SSA O e a janela de 25 posições
+do filtro. Não há critério de convergência iterativo ou repetição sem limite. A avaliação visual
+e de desempenho em GPU será realizada quando os shaders forem integrados à aplicação; os
+resultados desta seção são expectativas da lógica especificada.
+
+=================================== PÁGINA 12 ===================================
+12
+6 Pseudocódigo completo dos shaders
+Os seis arquivos abaixo são reproduzidos integralmente. As numerações de linha servem apenas
+à leitura do PDF; não fazem parte dos arquivos de texto. float representa escalar de ponto
+flutuante; int/uint representam inteiros; bool indica condição; vec2, vec3 e vec4 agrupam
+componentes de ponto flutuante; ivec2 guarda coordenadas inteiras; mat3/mat4 são matrizes;
+sampler2D representa acesso a imagem 2D amostrada.
+Nas funções auxiliares, finite1/3/4 detectam NaN e infinito, unitVector normaliza
+com teste de comprimento, centerUV calcula o centro de texel, inside verifica limites,
+surfaceDepth distingue superfície de fundo e reconstruct aplica a projeção inversa. T odas
+as funções necessárias aparecem no próprio arquivo que as utiliza.
+6.1 geometry.vert
+Posiciona a geometria e transporta a normal para o fragment shader do G-buffer.
+1 #version 450
+2 // Entrega 3 − SSAO. Pseudocodigo de referencia em GLSL.
+3 // VERTEX SHADER de RP0: transforma posicao e normal.
+4 layout(location=0) in vec3 inPosition; // VB: objeto, offset 0.
+5 layout(location=1) in vec3 inNormal; // VB: objeto, offset 12.
+6 layout(location=0) out vec3 normalView; // Interpolada para FS.
+7 // Bloco global std140: 272 bytes; matrizes por colunas.
+8 layout(set=0, binding=0, std140) uniform FrameUBO {
+9 mat4 view; // 0: mundo −> visao; camera olha para −Z.
+10 mat4 proj; // 64: projecao Vulkan; NDC.z em [0,1].
+11 mat4 invProj; // 128: inversa EXATA de proj.
+12 vec4 aoParams; // 192: raio, bias, expoente AO, sigma pixel.
+13 vec4 viewport; // 208: W, H, 1/W, 1/H; W,H > 0.
+14 vec4 lightDir; // 224: xyz aponta PARA a luz em visao.
+15 vec4 lightColor; // 240: RGB linear da luz; w reservado.
+16 vec4 ambient; // 256: RGB linear ambiente; w reservado.
+17 } frame;
+18 layout(push_constant, std430) uniform ObjectPC {
+19 mat4 model; // 0: objeto −> mundo; 64 bytes.
+20 mat4 normalView; // 64: transpose(inverse(view∗model)).
+21 } object;
+22 const float EPS = 1e−6; // Tolerancia numerica; nao e o bias.
+23 // x e o valor escalar/vetorial a verificar em finite1/3/4.
+24 bool finite1(float x) { return !isnan(x) && !isinf(x); }
+25 bool finite3(vec3 x) {
+26 return !any(isnan(x)) && !any(isinf(x));
+27 }
+28 bool finite4(vec4 x) {
+29 return !any(isnan(x)) && !any(isinf(x));
+30 }
+31 // unitVector: v e o vetor recebido; n e a direcao de saida.
+32 // len2 e o quadrado do comprimento de v.
+33 // Retorna false para vetores nulos, invalidos ou com overflow.
+34 bool unitVector(vec3 v, out vec3 n) {
+35 n = vec3(0.0, 0.0, 1.0);
+36 float len2 = dot(v, v);
+37 if (!finite3(v) || !finite1(len2) || len2 <= EPS∗EPS)
+38 return false;
+
+=================================== PÁGINA 13 ===================================
+13
+39 n = v ∗ inversesqrt(len2);
+40 return true;
+41 }
+42 void main() {
+43 // positionView (vec4): posicao homogenea em espaco de visao.
+44 // clip (vec4): posicao projetada, ainda sem dividir por w.
+45 // n (vec3): normal transformada, antes de ser interpolada.
+46 // CPU valida matrizes finitas e transformacao invertivel.
+47 // Se M for singular, a CPU nao desenha o objeto.
+48 vec4 positionView = frame.view ∗ object.model ∗
+49 vec4(inPosition, 1.0);
+50 vec4 clip = frame.proj ∗ positionView;
+51 vec3 n = mat3(object.normalView) ∗ inNormal;
+52 // Nao normalizar antes de aplicar a inversa transposta.
+53 // A renormalizacao definitiva ocorre apos interpolacao.
+54 if (!finite3(inPosition) || !finite4(clip) ||
+55 !finite3(n)) {
+56 gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+57 normalView = vec3(0.0); // Marca este vertice como invalido.
+58 // Isto nao descarta uma primitiva inteira: a CPU deve
+59 // rejeitar a primitiva se qualquer vertice for invalido.
+60 return;
+61 }
+62 gl_Position = clip; // Rasterizador faz clipping e divide por w.
+63 normalView = n;
+64 // Sem texturas, loops ou escrita manual de profundidade.
+65 }
+6.2 geometry.frag
+Produz normal e albedo; os testes fixos do pipeline produzem a profundidade.
+1 #version 450
+2 // Entrega 3 − SSAO. Pseudocodigo de referencia em GLSL.
+3 // FRAGMENT SHADER de RP0: grava G−buffer da geometria opaca.
+4 layout(location=0) in vec3 normalView; // Saida do vertex shader.
+5 layout(location=0) out vec4 outNormal; // gNormal, RGBA16F.
+6 layout(location=1) out vec4 outAlbedo; // gAlbedo, RGBA8_UNORM.
+7 layout(set=1, binding=0, std140) uniform MaterialUBO {
+8 vec4 baseColor; // Cor linear RGBA por objeto; 16 bytes.
+9 } material;
+10 const float EPS = 1e−6; // Tolerancia numerica; nao e o bias.
+11 // x e o valor escalar/vetorial a verificar em finite1/3/4.
+12 bool finite1(float x) { return !isnan(x) && !isinf(x); }
+13 bool finite3(vec3 x) {
+14 return !any(isnan(x)) && !any(isinf(x));
+15 }
+16 bool finite4(vec4 x) {
+17 return !any(isnan(x)) && !any(isinf(x));
+18 }
+19 // unitVector: v e o vetor recebido; n e a direcao de saida.
+20 // len2 e o quadrado do comprimento de v.
+21 // Retorna false para vetores nulos, invalidos ou com overflow.
+22 bool unitVector(vec3 v, out vec3 n) {
+23 n = vec3(0.0, 0.0, 1.0);
+24 float len2 = dot(v, v);
+25 if (!finite3(v) || !finite1(len2) || len2 <= EPS∗EPS)
+26 return false;
+
+=================================== PÁGINA 14 ===================================
+14
+27 n = v ∗ inversesqrt(len2);
+28 return true;
+29 }
+30 void main() {
+31 vec3 n; // Normal interpolada, renormalizada em visao.
+32 // Interpolacao muda o comprimento: normalizar novamente.
+33 if (!unitVector(normalView, n)) discard;
+34 vec3 albedo = material.baseColor.rgb; // Cor linear RGB.
+35 if (!finite3(albedo)) albedo = vec3(0.0);
+36 outNormal = vec4(n, 1.0); // RGB assinado; NAO codificar 0..1.
+37 outAlbedo = vec4(clamp(albedo, 0.0, 1.0), 1.0);
+38 // gDepth e escrito pelo pipeline fixo: LESS, clear=1.
+39 // Nao declarar early_fragment_tests: discard deve impedir
+40 // tambem a escrita de profundidade do fragmento invalido.
+41 // Nao ha gl_FragDepth, texturas ou loops neste passe.
+42 }
+6.3 fullscreen.vert
+Gera a cobertura de tela comum aos três passes de pós-processamento.
+1 #version 450
+2 // Entrega 3 − SSAO. Pseudocodigo de referencia em GLSL.
+3 // VERTEX SHADER compartilhado por RP1, RP2 e RP3.
+4 // Chamada: vkCmdDraw(3, 1, 0, 0); sem vertex/index buffer.
+5 // Entrada built−in: gl_VertexIndex (int, valores 0, 1, 2).
+6 // Saida built−in: gl_Position (vec4, coordenadas de clip).
+7 void main() {
+8 // positions: tres pares XY em clip; z=0 e w=1.
+9 const vec2 positions[3] = vec2[3](
+10 vec2(−1.0, −1.0),
+11 vec2( 3.0, −1.0),
+12 vec2(−1.0, 3.0)
+13 );
+14 // O recorte do triangulo cobre todos os centros de pixel.
+15 gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
+16 // FS obtem coordenadas por gl_FragCoord; sem varyings/UV.
+17 // Desativar culling, blending e teste/escrita de depth.
+18 // Nao ha UBOs, samplers, loops ou matrizes neste shader.
+19 }
+6.4 ssao.frag
+Reconstrói a geometria visível e estima a acessibilidade ambiente.
+1 #version 450
+2 // Entrega 3 − SSAO. Pseudocodigo de referencia em GLSL.
+3 // FRAGMENT SHADER de RP1: acessibilidade ambiente bruta.
+4 // Entrada built−in: gl_FragCoord.xy, centro do pixel.
+5 layout(location=0) out float outAO; // aoRaw R16F: 1=aberto.
+6 // Bloco global std140: 272 bytes; matrizes por colunas.
+7 layout(set=0, binding=0, std140) uniform FrameUBO {
+8 mat4 view; // 0: mundo −> visao; camera olha para −Z.
+
+=================================== PÁGINA 15 ===================================
+15
+9 mat4 proj; // 64: projecao Vulkan; NDC.z em [0,1].
+10 mat4 invProj; // 128: inversa EXATA de proj.
+11 vec4 aoParams; // 192: raio, bias, expoente AO, sigma pixel.
+12 vec4 viewport; // 208: W, H, 1/W, 1/H; W,H > 0.
+13 vec4 lightDir; // 224: xyz aponta PARA a luz em visao.
+14 vec4 lightColor; // 240: RGB linear da luz; w reservado.
+15 vec4 ambient; // 256: RGB linear ambiente; w reservado.
+16 } frame;
+17 layout(set=0, binding=1, std140) uniform KernelUBO {
+18 vec4 samples[32]; // xyz hemisferio local z>=0, raio <=1.
+19 } kernel; // 512 bytes; w reservado.
+20 layout(set=1, binding=0) uniform sampler2D gDepth;
+21 layout(set=1, binding=1) uniform sampler2D gNormal;
+22 layout(set=1, binding=2) uniform sampler2D noiseTexture;
+23 // Depth/Normal: NEAREST, CLAMP_TO_EDGE, comparacao desligada.
+24 // Noise: NEAREST, REPEAT, vetores XY assinados, imagem 4x4.
+25 // Todas as imagens tem apenas mip 0; nenhum mip e interpolado.
+26 const float EPS = 1e−6; // Tolerancia numerica; nao e o bias.
+27 // x e o valor escalar/vetorial a verificar em finite1/3/4.
+28 bool finite1(float x) { return !isnan(x) && !isinf(x); }
+29 bool finite3(vec3 x) {
+30 return !any(isnan(x)) && !any(isinf(x));
+31 }
+32 bool finite4(vec4 x) {
+33 return !any(isnan(x)) && !any(isinf(x));
+34 }
+35 // unitVector: v e o vetor recebido; n e a direcao de saida.
+36 // len2 e o quadrado do comprimento de v.
+37 // Retorna false para vetores nulos, invalidos ou com overflow.
+38 bool unitVector(vec3 v, out vec3 n) {
+39 n = vec3(0.0, 0.0, 1.0);
+40 float len2 = dot(v, v);
+41 if (!finite3(v) || !finite1(len2) || len2 <= EPS∗EPS)
+42 return false;
+43 n = v ∗ inversesqrt(len2);
+44 return true;
+45 }
+46 // pixel=(coluna,linha); size=(largura,altura), ambos ivec2.
+47 // UV do centro do texel, coerente com viewport positivo.
+48 vec2 centerUV(ivec2 pixel, ivec2 size) {
+49 return (vec2(pixel) + vec2(0.5)) / vec2(size);
+50 }
+51 bool inside(ivec2 pixel, ivec2 size) {
+52 return all(greaterThanEqual(pixel, ivec2(0))) &&
+53 all(lessThan(pixel, size));
+54 }
+55 // d=1 e fundo (clear=1, teste LESS); d=0 e valido.
+56 bool surfaceDepth(float d) {
+57 return finite1(d) && d >= 0.0 && d < 1.0;
+58 }
+59 // uv: coordenada de textura; d: profundidade Vulkan.
+60 // position: saida em visao; h: ponto homogeneo antes de /w.
+61 bool reconstruct(vec2 uv, float d, out vec3 position) {
+62 position = vec3(0.0);
+63 vec4 h = frame.invProj ∗ vec4(2.0∗uv−1.0, d, 1.0);
+64 if (!finite4(h) || abs(h.w) <= EPS) return false;
+65 position = h.xyz / h.w; // Divisao homogenea.
+66 return finite3(position) && position.z < 0.0;
+67 }
+68 void main() {
+69 // size e pixel (ivec2): extensao da imagem e pixel atual.
+70 // depth (float): profundidade central; uv (vec2): seu centro.
+71 // p e n (vec3): posicao reconstruida e normal unitaria em visao.
+
+=================================== PÁGINA 16 ===================================
+16
+72 // randomV (vec3): ruido XY; t e b (vec3): tangente e bitangente.
+73 // axis (vec3): eixo auxiliar se o ruido for paralelo a n.
+74 // i (int): indice no kernel; k (vec3): amostra local escalada.
+75 // k2 (float): comprimento ao quadrado da amostra k.
+76 // q (vec3): candidato em visao; clip (vec4): candidato projetado.
+77 // ndc (vec3): clip.xyz/clip.w; sampleUV (vec2): UV projetado.
+78 // samplePixel (ivec2): texel consultado; d (float): seu depth.
+79 // sceneP (vec3): posicao da superficie visivel nesse texel.
+80 // deltaZ (float): separacao de profundidade entre p e sceneP.
+81 // weight e blocked (float): peso de alcance e indicador 0/1.
+82 outAO = 1.0; // Fundo/erro/ausencia de amostras: sem oclusao.
+83 ivec2 size = textureSize(gDepth, 0);
+84 ivec2 pixel = ivec2(gl_FragCoord.xy);
+85 if (any(lessThanEqual(size, ivec2(0))) ||
+86 any(notEqual(textureSize(gNormal, 0), size)) ||
+87 any(notEqual(textureSize(noiseTexture, 0), ivec2(4))) ||
+88 !inside(pixel, size)) return;
+89 // Fetch inteiro, sem interpolacao, sempre LOD 0.
+90 float depth = texelFetch(gDepth, pixel, 0).r;
+91 vec3 p, n;
+92 if (!surfaceDepth(depth)) return;
+93 vec2 uv = centerUV(pixel, size);
+94 if (!reconstruct(uv, depth, p) ||
+95 !unitVector(texelFetch(gNormal, pixel, 0).xyz, n))
+96 return;
+97 float radius = frame.aoParams.x; // Unidade da cena.
+98 float bias = frame.aoParams.y; // Evita auto−oclusao.
+99 if (!finite1(radius) || radius <= EPS ||
+100 !finite1(bias)) return;
+101 bias = max(bias, 0.0);
+102 // UV∗size/4 repete ruido a cada quatro pixels.
+103 vec3 randomV = textureLod(noiseTexture,
+104 uv ∗ vec2(size)/4.0, 0.0).xyz;
+105 randomV.z = 0.0;
+106 if (!finite3(randomV)) randomV = vec3(1.0, 0.0, 0.0);
+107 // Gram−Schmidt: remove componente paralela a normal.
+108 vec3 t;
+109 if (!unitVector(randomV − n∗dot(randomV, n), t)) {
+110 // Eixo auxiliar nao paralelo; evita normalize(0).
+111 vec3 axis = abs(n.z) < 0.999 ? vec3(0,0,1)
+112 : vec3(0,1,0);
+113 if (!unitVector(cross(axis, n), t)) return;
+114 }
+115 vec3 b;
+116 if (!unitVector(cross(n, t), b)) return;
+117 mat3 tbn = mat3(t, b, n); // Colunas: tangente, bitangente, normal.
+118 float occlusion = 0.0; // Soma ponderada de bloqueios.
+119 int validCount = 0; // Denominador, nao soma dos pesos.
+120 for (int i=0; i<32; ++i) { // Sempre termina apos 32 candidatos.
+121 vec3 k = kernel.samples[i].xyz;
+122 float k2 = dot(k, k);
+123 if (!finite3(k) || !finite1(k2) || k.z < 0.0 ||
+124 k2 <= EPS∗EPS || k2 > 1.0001) continue;
+125 vec3 q = p + radius ∗ (tbn ∗ k); // Candidato em visao.
+126 if (!finite3(q) || q.z >= 0.0) continue;
+127 vec4 clip = frame.proj ∗ vec4(q, 1.0);
+128 if (!finite4(clip) || clip.w <= EPS) continue;
+129 vec3 ndc = clip.xyz / clip.w;
+130 if (!finite3(ndc) || ndc.z < 0.0 || ndc.z > 1.0)
+131 continue; // Rejeita fora do volume de projecao.
+132 vec2 sampleUV = ndc.xy ∗ 0.5 + 0.5;
+133 if (any(lessThan(sampleUV, vec2(0.0))) ||
+134 any(greaterThanEqual(sampleUV, vec2(1.0))))
+
+=================================== PÁGINA 17 ===================================
+17
+135 continue; // Nao usar clamp para inventar oclusores.
+136 ivec2 samplePixel = ivec2(floor(sampleUV∗vec2(size)));
+137 if (!inside(samplePixel, size)) continue;
+138 float d = texelFetch(gDepth, samplePixel, 0).r;
+139 if (!finite1(d) || d < 0.0 || d > 1.0) continue;
+140 if (d == 1.0) {
+141 ++validCount; // Fundo visivel: candidato nao bloqueado.
+142 continue;
+143 }
+144 vec3 sceneP;
+145 // Reconstruir no CENTRO do texel realmente lido.
+146 if (!reconstruct(centerUV(samplePixel, size), d, sceneP))
+147 continue;
+148 float deltaZ = abs(p.z − sceneP.z);
+149 if (!finite1(deltaZ)) continue;
+150 ++validCount;
+151 // Atenuacao suave por separacao de profundidade.
+152 float weight = smoothstep(0.0, 1.0,
+153 radius/max(deltaZ, EPS));
+154 // Com −Z: maior z e mais perto da camera.
+155 float blocked = sceneP.z >= q.z + bias ? 1.0 : 0.0;
+156 occlusion += weight ∗ blocked;
+157 }
+158 if (validCount > 0)
+159 outAO = clamp(1.0 − occlusion/float(validCount), 0.0, 1.0);
+160 // A intensidade e aplicada so na composicao, apos o filtro.
+161 }
+6.5 bilateral.frag
+Filtra a acessibilidade com pesos guiados por profundidade e normal.
+1 #version 450
+2 // Entrega 3 − SSAO. Pseudocodigo de referencia em GLSL.
+3 // FRAGMENT SHADER de RP2: filtro bilateral 5x5, resolucao W x H.
+4 layout(location=0) out float outAO; // aoFiltered R16F.
+5 // Bloco global std140: 272 bytes; matrizes por colunas.
+6 layout(set=0, binding=0, std140) uniform FrameUBO {
+7 mat4 view; // 0: mundo −> visao; camera olha para −Z.
+8 mat4 proj; // 64: projecao Vulkan; NDC.z em [0,1].
+9 mat4 invProj; // 128: inversa EXATA de proj.
+10 vec4 aoParams; // 192: raio, bias, expoente AO, sigma pixel.
+11 vec4 viewport; // 208: W, H, 1/W, 1/H; W,H > 0.
+12 vec4 lightDir; // 224: xyz aponta PARA a luz em visao.
+13 vec4 lightColor; // 240: RGB linear da luz; w reservado.
+14 vec4 ambient; // 256: RGB linear ambiente; w reservado.
+15 } frame;
+16 layout(set=1, binding=0) uniform sampler2D aoRaw;
+17 layout(set=1, binding=1) uniform sampler2D gDepth;
+18 layout(set=1, binding=2) uniform sampler2D gNormal;
+19 // Constantes de especializacao: valores iniciais para cena em metros.
+20 layout(constant_id=0) const float SIGMA_Z = 0.10;
+21 layout(constant_id=1) const float NORMAL_POWER = 8.0;
+22 // Samplers NEAREST/CLAMP_TO_EDGE; texelFetch ignora filtragem.
+23 // Somente mip 0; nao ler e escrever a mesma imagem.
+24 const float EPS = 1e−6; // Tolerancia numerica; nao e o bias.
+25 // x e o valor escalar/vetorial a verificar em finite1/3/4.
+26 bool finite1(float x) { return !isnan(x) && !isinf(x); }
+
+=================================== PÁGINA 18 ===================================
+18
+27 bool finite3(vec3 x) {
+28 return !any(isnan(x)) && !any(isinf(x));
+29 }
+30 bool finite4(vec4 x) {
+31 return !any(isnan(x)) && !any(isinf(x));
+32 }
+33 // unitVector: v e o vetor recebido; n e a direcao de saida.
+34 // len2 e o quadrado do comprimento de v.
+35 // Retorna false para vetores nulos, invalidos ou com overflow.
+36 bool unitVector(vec3 v, out vec3 n) {
+37 n = vec3(0.0, 0.0, 1.0);
+38 float len2 = dot(v, v);
+39 if (!finite3(v) || !finite1(len2) || len2 <= EPS∗EPS)
+40 return false;
+41 n = v ∗ inversesqrt(len2);
+42 return true;
+43 }
+44 // pixel=(coluna,linha); size=(largura,altura), ambos ivec2.
+45 // UV do centro do texel, coerente com viewport positivo.
+46 vec2 centerUV(ivec2 pixel, ivec2 size) {
+47 return (vec2(pixel) + vec2(0.5)) / vec2(size);
+48 }
+49 bool inside(ivec2 pixel, ivec2 size) {
+50 return all(greaterThanEqual(pixel, ivec2(0))) &&
+51 all(lessThan(pixel, size));
+52 }
+53 // d=1 e fundo (clear=1, teste LESS); d=0 e valido.
+54 bool surfaceDepth(float d) {
+55 return finite1(d) && d >= 0.0 && d < 1.0;
+56 }
+57 // uv: coordenada de textura; d: profundidade Vulkan.
+58 // position: saida em visao; h: ponto homogeneo antes de /w.
+59 bool reconstruct(vec2 uv, float d, out vec3 position) {
+60 position = vec3(0.0);
+61 vec4 h = frame.invProj ∗ vec4(2.0∗uv−1.0, d, 1.0);
+62 if (!finite4(h) || abs(h.w) <= EPS) return false;
+63 position = h.xyz / h.w; // Divisao homogenea.
+64 return finite3(position) && position.z < 0.0;
+65 }
+66 void main() {
+67 // gl_FragCoord.xy (vec2): centro do fragmento em pixels.
+68 // size/pixel (ivec2): extensao da imagem e coordenada central.
+69 // dc (float): depth central; pc/nc (vec3): posicao/normal em visao.
+70 // centerAO (float): acessibilidade bruta do pixel central.
+71 // sumAO/sumWeight (float): soma ponderada de AO e soma dos pesos.
+72 // dx/dy (int): deslocamentos da janela; q (ivec2): pixel vizinho.
+73 // dq/aq (float): profundidade Vulkan e AO bruto do vizinho.
+74 // pq/nq (vec3): posicao reconstruida e normal do vizinho.
+75 // offset (vec2): deslocamento em pixels dividido por sigmaS.
+76 // dz (float): diferenca de Z em visao dividida por SIGMA_Z.
+77 // ws/wz/wn (float): pesos espacial, de profundidade e de normal.
+78 // weight (float): produto dos tres pesos, usado na media.
+79 outAO = 1.0;
+80 ivec2 size = textureSize(gDepth, 0);
+81 ivec2 pixel = ivec2(gl_FragCoord.xy);
+82 if (any(lessThanEqual(size, ivec2(0))) ||
+83 any(notEqual(textureSize(aoRaw, 0), size)) ||
+84 any(notEqual(textureSize(gNormal, 0), size)) ||
+85 !inside(pixel, size)) return;
+86 float dc = texelFetch(gDepth, pixel, 0).r;
+87 vec3 pc, nc;
+88 if (!surfaceDepth(dc) ||
+89 !reconstruct(centerUV(pixel, size), dc, pc) ||
+
+=================================== PÁGINA 19 ===================================
+19
+90 !unitVector(texelFetch(gNormal, pixel, 0).xyz, nc))
+91 return;
+92 float centerAO = texelFetch(aoRaw, pixel, 0).r;
+93 if (!finite1(centerAO)) return;
+94 centerAO = clamp(centerAO, 0.0, 1.0);
+95 outAO = centerAO; // Fallback: preservar centro valido.
+96 float sigmaS = frame.aoParams.w; // Desvio espacial em pixels.
+97 if (!finite1(sigmaS) || sigmaS <= EPS ||
+98 !finite1(SIGMA_Z) || SIGMA_Z <= EPS ||
+99 !finite1(NORMAL_POWER) || NORMAL_POWER <= 0.0)
+100 return;
+101 // Centro tem peso exatamente 1; garante denominador positivo.
+102 float sumAO = centerAO;
+103 float sumWeight = 1.0;
+104 for (int dy=−2; dy<=2; ++dy) {
+105 for (int dx=−2; dx<=2; ++dx) {
+106 if (dx==0 && dy==0) continue; // Centro ja incluido.
+107 ivec2 q = pixel + ivec2(dx, dy);
+108 if (!inside(q, size)) continue; // Sem duplicar bordas.
+109 float dq = texelFetch(gDepth, q, 0).r;
+110 float aq = texelFetch(aoRaw, q, 0).r;
+111 vec3 pq, nq;
+112 if (!surfaceDepth(dq) || !finite1(aq) ||
+113 !reconstruct(centerUV(q, size), dq, pq) ||
+114 !unitVector(texelFetch(gNormal, q, 0).xyz, nq))
+115 continue; // Fundo/erro nao contamina a superficie.
+116 vec2 offset = vec2(dx, dy) / sigmaS;
+117 float dz = (pc.z − pq.z) / SIGMA_Z;
+118 // Pesos espacial, profundidade e semelhanca normal.
+119 float ws = exp(−0.5 ∗ dot(offset, offset));
+120 float wz = exp(−0.5 ∗ dz∗dz);
+121 float wn = pow(clamp(dot(nc, nq), 0.0, 1.0),
+122 NORMAL_POWER);
+123 float weight = ws ∗ wz ∗ wn;
+124 if (!finite1(weight) || weight <= 0.0) continue;
+125 sumAO += clamp(aq, 0.0, 1.0) ∗ weight;
+126 sumWeight += weight;
+127 }
+128 } // 25 posicoes: centro + no maximo 24 vizinhos.
+129 outAO = clamp(sumAO / sumWeight, 0.0, 1.0);
+130 }
+6.6 lighting.frag
+Produz a cor final combinando material, luz direta e ambiente ocluído.
+1 #version 450
+2 // Entrega 3 − SSAO. Pseudocodigo de referencia em GLSL.
+3 // FRAGMENT SHADER de RP3: iluminacao difusa + ambiente com SSAO.
+4 layout(location=0) out vec4 outColor; // Attachment da swapchain sRGB.
+5 // Bloco global std140: 272 bytes; matrizes por colunas.
+6 layout(set=0, binding=0, std140) uniform FrameUBO {
+7 mat4 view; // 0: mundo −> visao; camera olha para −Z.
+8 mat4 proj; // 64: projecao Vulkan; NDC.z em [0,1].
+9 mat4 invProj; // 128: inversa EXATA de proj.
+10 vec4 aoParams; // 192: raio, bias, expoente AO, sigma pixel.
+11 vec4 viewport; // 208: W, H, 1/W, 1/H; W,H > 0.
+12 vec4 lightDir; // 224: xyz aponta PARA a luz em visao.
+
+=================================== PÁGINA 20 ===================================
+20
+13 vec4 lightColor; // 240: RGB linear da luz; w reservado.
+14 vec4 ambient; // 256: RGB linear ambiente; w reservado.
+15 } frame;
+16 layout(set=1, binding=0) uniform sampler2D gAlbedo;
+17 layout(set=1, binding=1) uniform sampler2D gNormal;
+18 layout(set=1, binding=2) uniform sampler2D aoFiltered;
+19 layout(set=1, binding=3) uniform sampler2D gDepth;
+20 // Todos sampler2D comuns: NEAREST, CLAMP_TO_EDGE, mip 0.
+21 // Albedo e linear em RGBA8_UNORM; normal e assinada em RGBA16F.
+22 const float EPS = 1e−6; // Tolerancia numerica; nao e o bias.
+23 // x e o valor escalar/vetorial a verificar em finite1/3/4.
+24 bool finite1(float x) { return !isnan(x) && !isinf(x); }
+25 bool finite3(vec3 x) {
+26 return !any(isnan(x)) && !any(isinf(x));
+27 }
+28 bool finite4(vec4 x) {
+29 return !any(isnan(x)) && !any(isinf(x));
+30 }
+31 // unitVector: v e o vetor recebido; n e a direcao de saida.
+32 // len2 e o quadrado do comprimento de v.
+33 // Retorna false para vetores nulos, invalidos ou com overflow.
+34 bool unitVector(vec3 v, out vec3 n) {
+35 n = vec3(0.0, 0.0, 1.0);
+36 float len2 = dot(v, v);
+37 if (!finite3(v) || !finite1(len2) || len2 <= EPS∗EPS)
+38 return false;
+39 n = v ∗ inversesqrt(len2);
+40 return true;
+41 }
+42 // color: RGB de entrada; retorno: RGB finito e nao negativo.
+43 vec3 nonnegative(vec3 color) {
+44 return finite3(color) ? max(color, vec3(0.0)) : vec3(0.0);
+45 }
+46 void main() {
+47 // gl_FragCoord.xy (vec2): centro do fragmento em pixels.
+48 // size/pixel (ivec2): extensao da imagem e pixel atual.
+49 // d (float): depth; n/l (vec3): normal e direcao para a luz.
+50 // albedo (vec3): cor linear do material; ao (float): AO filtrado.
+51 // accessibility (float): AO apos o expoente gammaAO.
+52 // diffuse (float): resposta de Lambert max(dot(n,l),0).
+53 // direct/ambient (vec3): contribuicoes RGB antes do albedo.
+54 // linearColor (vec3): cor resultante em espaco linear.
+55 // Cor de fundo linear definida nesta variante didatica.
+56 outColor = vec4(0.02, 0.025, 0.04, 1.0);
+57 ivec2 size = textureSize(gDepth, 0);
+58 ivec2 pixel = ivec2(gl_FragCoord.xy);
+59 if (any(lessThanEqual(size, ivec2(0))) ||
+60 any(lessThan(pixel, ivec2(0))) ||
+61 any(greaterThanEqual(pixel, size)) ||
+62 any(notEqual(textureSize(gAlbedo, 0), size)) ||
+63 any(notEqual(textureSize(gNormal, 0), size)) ||
+64 any(notEqual(textureSize(aoFiltered, 0), size))) return;
+65 float d = texelFetch(gDepth, pixel, 0).r;
+66 if (!finite1(d) || d < 0.0 || d >= 1.0) return;
+67 vec3 n;
+68 if (!unitVector(texelFetch(gNormal, pixel, 0).xyz, n)) return;
+69 vec3 albedo = clamp(nonnegative(
+70 texelFetch(gAlbedo, pixel, 0).rgb), 0.0, 1.0);
+71 float ao = texelFetch(aoFiltered, pixel, 0).r;
+72 if (!finite1(ao)) ao = 1.0;
+73 ao = clamp(ao, 0.0, 1.0);
+74 float gammaAO = frame.aoParams.z; // Expoente, nao gama de cor.
+75 if (!finite1(gammaAO) || gammaAO <= 0.0) gammaAO = 1.0;
+
+=================================== PÁGINA 21 ===================================
+21
+76 float accessibility = pow(ao, gammaAO);
+77 vec3 l;
+78 float diffuse = 0.0;
+79 if (unitVector(frame.lightDir.xyz, l))
+80 diffuse = max(dot(n, l), 0.0); // Lambert, direcao PARA luz.
+81 // Luz nula/invalida: parcela direta zero, ambiente preservado.
+82 vec3 direct = nonnegative(frame.lightColor.rgb) ∗ diffuse;
+83 vec3 ambient = nonnegative(frame.ambient.rgb) ∗ accessibility;
+84 vec3 linearColor = albedo ∗ (direct + ambient);
+85 if (!finite3(linearColor)) linearColor = vec3(0.0);
+86 // Saida LDR: valores fora de 0..1 sao saturados; sem tone mapping.
+87 outColor = vec4(clamp(linearColor, 0.0, 1.0), 1.0);
+88 // Conversao linear −> sRGB pelo attachment; NAO usar pow(1/2.2).
+89 // Sem especular, sombras diretas, transparencia ou loops aqui.
+90 }
+
+=================================== PÁGINA 22 ===================================
+22
+Referências
+BA V OIL, Louis; SAINZ, Miguel. Screen Space Ambient Occlusion . NVIDIA, 2008.
+Disponível em: https://developer.download.nvidia.com/SDK/10.5/direct3d/Source
+/ScreenSpaceAO/doc/ScreenSpaceAO.pdf. Acesso em: 21 set. 2026.
+KHRONOS GROUP .VkViewport. Vulkan Documentation Project, 2026a. Disponível em: ht
+tps://docs.vulkan.org/refpages/latest/refpages/source/VkViewport.html . Acesso
+em: 21 set. 2026.
+KHRONOS GROUP .Shader Memory Layout. Vulkan Guide, 2026b. Disponível em: https:
+//docs.vulkan.org/guide/latest/shader_memory_layout.html . Acesso em: 21 set.
+2026.
+KHRONOS GROUP . Built-In Functions . The OpenGL Shading Language, Vulkan
+Documentation Project, 2026c. Disponível em: https://docs.vulkan.org/glsl/lat
+est/chapters/builtinfunctions.html. Acesso em: 21 set. 2026.

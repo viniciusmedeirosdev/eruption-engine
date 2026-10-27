@@ -1,0 +1,13 @@
+digraph SSAO_Eruption {
+  graph [rankdir=LR, splines=ortho, bgcolor="white", label="Eruption Engine: fluxo SSAO Vulkan (implementação do fork)", labelloc=t, fontsize=18];
+  node [shape=box, style="rounded", fontname="DejaVu Sans", fontsize=11];
+  CPU [label="CPU / Engine\ncomandos + UBO + assets"];
+  Vulkan [label="VulkanContext\ninstance/device/swapchain"];
+  GBuf [label="G-buffer (dynamic rendering)\nnormal, depth, material"];
+  SSAO [label="SSAO meia resolução\n12 amostras + invViewProj\nssao.frag (R8_UNORM)"];
+  Blur [label="Bilateral 3×3\nssao_blur.frag"];
+  Light [label="Ambient / direcional\nAO aplicado à iluminação"];
+  Post [label="Pós-processamento\nswapchain → apresentação"];
+  CPU -> Vulkan -> GBuf -> SSAO -> Blur -> Light -> Post;
+  GBuf -> Light [style=dashed, label="materiais/luzes"];
+}
