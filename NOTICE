@@ -1,0 +1,24 @@
+Vulcao SSAO - versao reduzida, para apresentacao, derivada da Eruption Engine.
+
+Eruption Engine
+Copyright 2026 Gdg Solucoes Digitais LTDA
+https://github.com/eruptionlabs/eruption-engine
+
+O codigo-fonte e' licenciado sob a Apache License 2.0 (ver LICENSE).
+Este repositorio foi reescrito a partir do fork da Eruption Engine: o algoritmo
+de SSAO (shaders/ssao.frag e shaders/blur.frag) e' uma adaptacao do SSAO da
+engine original, e o mapa "parana_field" e' o mapa de demonstracao dela.
+
+Bibliotecas de terceiros obtidas em tempo de configuracao (CMake FetchContent),
+cada uma sob sua propria licenca:
+- GLFW (https://github.com/glfw/glfw) - Zlib/libpng License
+- GLM (https://github.com/g-truc/glm) - MIT License
+- Dear ImGui (https://github.com/ocornut/imgui) - MIT License
+- cgltf (https://github.com/jkuhlmann/cgltf) - MIT License
+- stb_image (https://github.com/nothings/stb) - Public Domain / MIT License
+
+Dependencia de sistema:
+- Vulkan SDK (https://www.vulkan.org/) - termos da Vulkan SDK License
+
+NOTA: o mapa parana_field (baixado do release da Eruption Engine durante o
+build) NAO faz parte da licenca Apache 2.0 que rege o codigo-fonte.
