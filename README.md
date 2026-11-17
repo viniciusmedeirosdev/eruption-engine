@@ -10,6 +10,12 @@ Este repositório é uma versão reduzida, feita para apresentação, do fork da
 todos comentados. O mapa e o algoritmo de SSAO vêm da engine original (ver `NOTICE`);
 o motor completo continua disponível no histórico do Git e no repositório original.
 
+## Vídeo de demonstração
+
+▶ **[Assistir à demonstração](https://github.com/viniciusmedeirosdev/eruption-engine/releases/download/demo-video/demonstracao-ssao.mp4)**
+(MP4, 77 MB, gravado em 17/11/2026), também disponível na
+[página do release](https://github.com/viniciusmedeirosdev/eruption-engine/releases/tag/demo-video).
+
 ## Arquivos
 
 | Arquivo | O que faz |
