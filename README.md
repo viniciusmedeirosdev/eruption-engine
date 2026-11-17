@@ -23,6 +23,14 @@ o motor completo continua disponível no histórico do Git e no repositório ori
 | `shaders/final.frag` | Passo 4: ilumina a cena usando a oclusão |
 | `CMakeLists.txt` | Compila tudo, baixa as bibliotecas e o mapa |
 
+## Executar no Windows 10/11 (um arquivo só)
+
+Dê dois cliques em **`executar.bat`**. Ele verifica e, se faltar, instala pelo `winget`
+o Git, o Visual Studio Build Tools (compilador C++), o CMake/Ninja e o Vulkan SDK; depois
+baixa as bibliotecas e o mapa, compila e abre o programa. A primeira vez demora (alguns
+GB de instalação) e o Windows pode pedir permissão de administrador; nas próximas, só
+abre. Opções: `executar.bat -Debug` (camada de validação) e `executar.bat -SoCompilar`.
+
 ## Compilar e executar (Ubuntu 24.04)
 
 ```bash
