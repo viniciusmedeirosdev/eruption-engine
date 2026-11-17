@@ -16,6 +16,15 @@ o motor completo continua disponível no histórico do Git e no repositório ori
 (MP4, 77 MB, gravado em 17/11/2026), também disponível na
 [página do release](https://github.com/viniciusmedeirosdev/eruption-engine/releases/tag/demo-video).
 
+> ⚠️ **AVISO: AI SLOP.** O reel abaixo foi **gerado por IA** (roteiro, narração sintética,
+> animações e efeitos sonoros). Ele pode conter imprecisões; a referência é o código e a
+> gravação acima. Os quadros de "normal" e "profundidade" e o ruído do blur são ilustrações,
+> não capturas do programa.
+
+▶ **[Reel explicativo — AI SLOP](reel-ssao-AI-SLOP.mp4)** (MP4 vertical 1080×1920, 61 s, ~20 MB).
+Música: "Club Seamus" – Kevin MacLeod (incompetech.com), licença
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
 ## Arquivos
 
 | Arquivo | O que faz |
